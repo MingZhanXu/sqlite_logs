@@ -9,12 +9,72 @@ import platform
 import getpass
 import socket
 import subprocess
+import psutil
+import GPUtil
+import json
 
-from typing import Type
+from typing import Type, List
 from dataclasses import dataclass
 
 # 設定單個資料庫大小上限為 100 MB
 MAX_DB_SIZE = 100 * 1024 * 1024
+__GB_SIZE = 1024**3
+
+
+def get_system_info():
+    # CPU 使用率
+    cpu_usage = f"{psutil.cpu_percent(interval=0)}%"
+    cpu_physical_cores = psutil.cpu_count(logical=False)
+    cpu_logical_cores = psutil.cpu_count(logical=True)
+    cpu_info = {
+        "usage": cpu_usage,
+        "physical_cores": cpu_physical_cores,
+        "logical_cores": cpu_logical_cores,
+    }
+    cpu_freq = psutil.cpu_freq()
+    if cpu_freq is not None:
+        cpu_info["current_frequency"] = f"{cpu_freq.current:.2f} MHz"
+        cpu_info["min_frequency"] = f"{cpu_freq.min:.2f} MHz"
+        cpu_info["max_frequency"] = f"{cpu_freq.max:.2f} MHz"
+
+    # 記憶體 使用率
+    memory = psutil.virtual_memory()
+    ram_total = f"{memory.total / __GB_SIZE:.2f} GB"
+    ram_used = f"{memory.used / __GB_SIZE:.2f} GB"
+    ram_free = f"{memory.free / __GB_SIZE:.2f} GB"
+    ram_percent = f"{memory.percent:.2f} %"
+    ram_info = {
+        "total": ram_total,
+        "used": ram_used,
+        "free": ram_free,
+        "percent": ram_percent,
+    }
+
+    # GPU 使用率
+    gpus = GPUtil.getGPUs()
+    gpu_info = []
+    for gpu in gpus:
+        gpu_info.append(
+            {
+                "id": gpu.id,
+                "name": gpu.name,
+                "memory_total": f"{gpu.memoryTotal / __GB_SIZE:.2f} GB",
+                "memory_used": f"{gpu.memoryUsed / __GB_SIZE:.2f} GB",
+                "memory_free": f"{gpu.memoryFree / __GB_SIZE:.2f} GB",
+                "memory_percent": f"{gpu.memoryUtil:.2f} % ",
+                "temperature": f"{gpu.temperature:.2f} °C",
+                "power": f"{gpu.powerUtil} W",
+                "utilization": f"{gpu.gpuUtil:.2f} %",
+            }
+        )
+
+    system_info = {
+        "CPU_info": cpu_info,
+        "RAM_info": ram_info,
+        "GPU_info": gpu_info,
+    }
+    system_info_str = json.dumps(system_info, indent=4)
+    return system_info_str
 
 
 def get_computer_name():
@@ -66,23 +126,29 @@ class LoggerType:
     sql_type: SQLType
 
 
+__SQL_TEXT = SQLType("TEXT", str)
+__SQL_INTEGER = SQLType("INTEGER", int)
+__SQL_REAL = SQLType("REAL", float)
+
 # log 資料庫表格欄位名稱與資料型態
-LOGER_TABE_INFO = [
-    LoggerType("host_inof", SQLType("TEXT", str)),
-    LoggerType("timestamp", SQLType("TEXT", str)),
-    LoggerType("type", SQLType("TEXT", str)),
-    LoggerType("function_file_name", SQLType("TEXT", str)),
-    LoggerType("function_line_number", SQLType("INTEGER", int)),
-    LoggerType("function_name", SQLType("TEXT", str)),
-    LoggerType("args", SQLType("TEXT", str)),
-    LoggerType("kwargs", SQLType("TEXT", str)),
-    LoggerType("thread_name", SQLType("TEXT", str)),
-    LoggerType("thread_id", SQLType("INTEGER", int)),
-    LoggerType("pid", SQLType("INTEGER", int)),
-    LoggerType("message", SQLType("TEXT", str)),
-    LoggerType("extra_info", SQLType("TEXT", str)),
-    LoggerType("function_time", SQLType("REAL", float)),
-    LoggerType("traceback", SQLType("TEXT", str)),
+LOGER_TABE_INFO: List[LoggerType] = [
+    LoggerType("system_info", __SQL_TEXT),
+    LoggerType("host_info", __SQL_TEXT),
+    LoggerType("timestamp", __SQL_TEXT),
+    LoggerType("type", __SQL_TEXT),
+    LoggerType("tag", __SQL_TEXT),
+    LoggerType("function_file_name", __SQL_TEXT),
+    LoggerType("function_line_number", __SQL_INTEGER),
+    LoggerType("function_name", __SQL_TEXT),
+    LoggerType("args", __SQL_TEXT),
+    LoggerType("kwargs", __SQL_TEXT),
+    LoggerType("thread_name", __SQL_TEXT),
+    LoggerType("thread_id", __SQL_INTEGER),
+    LoggerType("pid", __SQL_INTEGER),
+    LoggerType("message", __SQL_TEXT),
+    LoggerType("extra_info", __SQL_TEXT),
+    LoggerType("function_time", __SQL_REAL),
+    LoggerType("traceback", __SQL_TEXT),
 ]
 
 
@@ -186,20 +252,36 @@ class SQLiteLog:
         self.db_size += len(str(messages)) + 100
 
     def try_except(
-        self, func=None, *, success_type="LOG", extra_info="", error_return=None
+        self,
+        func=None,
+        *,
+        success_type="LOG",
+        log_tag="",
+        extra_info="",
+        error_return=None,
     ):
         """
         tre_except 裝飾器，用於捕獲函數執行過程中的異常，並將異常信息記錄到數據庫中
         error_return: 當函數執行出現異常時，返回的默認值，可使用此參數來自定義異常時的返回值
         """
+
+        # 帶參數調用
         if func is None:
-            return functools.partial(self.try_except, error_return=error_return)
+            return functools.partial(
+                self.try_except,
+                success_type=success_type,
+                log_tag=log_tag,
+                extra_info=extra_info,
+                error_return=error_return,
+            )
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             start_time = datetime.datetime.now()
             start_time_timestamp = start_time.timestamp()
             start_time = start_time.isoformat()
+
+            system_info = get_system_info()
 
             host_info = platform.uname()
             host_info = (
@@ -240,7 +322,7 @@ class SQLiteLog:
                 function_time = end_time_timestamp - start_time_timestamp
                 message = f"result: {repr(result)}"
                 messages = (
-                    [host_info, start_time, log_type]
+                    [system_info, host_info, start_time, log_type, log_tag]
                     + messages
                     + [message, extra_info, function_time, None]
                 )
@@ -252,7 +334,7 @@ class SQLiteLog:
                 function_time = end_time_timestamp - start_time_timestamp
                 error_msg = f"{e.__class__.__name__}: {str(e)}"
                 messages = (
-                    [host_info, start_time, log_type]
+                    [system_info, host_info, start_time, log_type, log_tag]
                     + messages
                     + [error_msg, extra_info, function_time, traceback.format_exc()]
                 )
@@ -359,3 +441,5 @@ class ReadLog:
             self.conn.close()
         except sqlite3.OperationalError as e:
             print(f"Close {self.db_name}_{self.db_index}.db failed")
+            print(f"Error: {e}")
+            exit(-1)

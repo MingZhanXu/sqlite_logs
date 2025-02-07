@@ -20,6 +20,12 @@ if __name__ == "__main__":
     print(delay())
 
     # 範例：如何使用裝飾器
+    @logger.try_except(log_tag="test")
+    def tag_division(a, b, c=3):
+        return {"a": (a / b), "b": c}
+
+    tag_division(99, 99)
+
     @logger.try_except
     def division(a, b, c=3):
         return {"a": (a / b), "b": c}
