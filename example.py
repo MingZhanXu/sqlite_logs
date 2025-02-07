@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # 範例：如何使用裝飾器
     @logger.try_except
     def division(a, b, c=3):
-        return (a / b) + c
+        return {"a": (a / b), "b": c}
 
     division(1, 2, c=4)
     # 執行多次 division 函數，並捕獲異常
@@ -38,11 +38,11 @@ if __name__ == "__main__":
     info = [name[1] for name in info]
     data = [{item: d[i] for i, item in enumerate(info)} for d in data]
     error_data = [{item: d[i] for i, item in enumerate(info)} for d in error_data]
-    # for d in data:
-    #     print(d)
-    #
-    # for d in error_data:
-    #     print(d)
+    for d in data:
+        print(d)
+
+    for d in error_data:
+        print(d)
 
     print()
     for key, value in error_data[0].items():

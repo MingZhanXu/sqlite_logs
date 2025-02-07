@@ -4,7 +4,6 @@ import traceback
 import sqlite3
 import os
 import atexit
-import time
 import threading
 import platform
 import getpass
@@ -177,8 +176,6 @@ class SQLiteLog:
         self.check_and_switch_db()
         field_str = f"{', '.join(self.field_name)}"
         input_datas = f"{', '.join(['?' for _ in range(len(self.field_name))])}"
-        print(f"INSERT INTO logs ({field_str}) VALUES ({input_datas})")
-        print(len(messages))
         self.cursor.execute(
             f"""
             INSERT INTO logs ({field_str}) VALUES ({input_datas})
