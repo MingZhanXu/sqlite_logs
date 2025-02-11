@@ -90,7 +90,7 @@ function info: 函數資訊
 thread info: 執行緒資訊
     thread_name: 執行緒名稱
     thread_id: 執行緒 ID
-    process_id: 執行緒 PID
+    process_id: 行程的 PID
 extra info: 額外資訊
     tag: log 標籤
     extra_info: 額外資訊
