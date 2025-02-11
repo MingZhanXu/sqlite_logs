@@ -1,12 +1,13 @@
 import os
-from sqlite_log import SQLiteLog, ReadLog
 import time
+from src.sqlite_log import SQLiteLog, ReadLog, LoggerField
+from tqdm import tqdm
 
 if __name__ == "__main__":
-    from tqdm import tqdm
 
     db_folder = os.path.join("logs", "test")
-    logger = SQLiteLog(db_folder=db_folder)
+    logger_field = LoggerField(is_thread_info=False)
+    logger = SQLiteLog(db_folder=db_folder, logger_table_info=logger_field.info())
 
     # 範例：如何傳入 except 執行函數，也可傳入參數
     def error():
@@ -44,11 +45,11 @@ if __name__ == "__main__":
     info = [name[1] for name in info]
     data = [{item: d[i] for i, item in enumerate(info)} for d in data]
     error_data = [{item: d[i] for i, item in enumerate(info)} for d in error_data]
-    for d in data:
-        print(d)
+    # for d in data:
+    #     print(d)
 
-    for d in error_data:
-        print(d)
+    # for d in error_data:
+    #     print(d)
 
     print()
     for key, value in error_data[0].items():

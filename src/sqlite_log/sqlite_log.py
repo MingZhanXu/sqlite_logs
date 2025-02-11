@@ -7,149 +7,229 @@ import atexit
 import threading
 import platform
 import getpass
-import socket
-import subprocess
-import psutil
-import GPUtil
-import json
 
-from typing import Type, List
-from dataclasses import dataclass
+from typing import List
+
+from .sqlite_log_type import (
+    SQLType,
+    LoggerType,
+    SQL_TEXT,
+    SQL_INTEGER,
+    SQL_REAL,
+)
+from .get_system_info import get_computer_name, get_system_info_json
 
 # 設定單個資料庫大小上限為 100 MB
 MAX_DB_SIZE = 100 * 1024 * 1024
-__GB_SIZE = 1024**3
 
-
-def get_system_info():
-    # CPU 使用率
-    cpu_usage = f"{psutil.cpu_percent(interval=0)}%"
-    cpu_physical_cores = psutil.cpu_count(logical=False)
-    cpu_logical_cores = psutil.cpu_count(logical=True)
-    cpu_info = {
-        "usage": cpu_usage,
-        "physical_cores": cpu_physical_cores,
-        "logical_cores": cpu_logical_cores,
-    }
-    cpu_freq = psutil.cpu_freq()
-    if cpu_freq is not None:
-        cpu_info["current_frequency"] = f"{cpu_freq.current:.2f} MHz"
-        cpu_info["min_frequency"] = f"{cpu_freq.min:.2f} MHz"
-        cpu_info["max_frequency"] = f"{cpu_freq.max:.2f} MHz"
-
-    # 記憶體 使用率
-    memory = psutil.virtual_memory()
-    ram_total = f"{memory.total / __GB_SIZE:.2f} GB"
-    ram_used = f"{memory.used / __GB_SIZE:.2f} GB"
-    ram_free = f"{memory.free / __GB_SIZE:.2f} GB"
-    ram_percent = f"{memory.percent:.2f} %"
-    ram_info = {
-        "total": ram_total,
-        "used": ram_used,
-        "free": ram_free,
-        "percent": ram_percent,
-    }
-
-    # GPU 使用率
-    gpus = GPUtil.getGPUs()
-    gpu_info = []
-    for gpu in gpus:
-        gpu_info.append(
-            {
-                "id": gpu.id,
-                "name": gpu.name,
-                "memory_total": f"{gpu.memoryTotal / __GB_SIZE:.2f} GB",
-                "memory_used": f"{gpu.memoryUsed / __GB_SIZE:.2f} GB",
-                "memory_free": f"{gpu.memoryFree / __GB_SIZE:.2f} GB",
-                "memory_percent": f"{gpu.memoryUtil:.2f} % ",
-                "temperature": f"{gpu.temperature:.2f} °C",
-                "power": f"{gpu.powerUtil} W",
-                "utilization": f"{gpu.gpuUtil:.2f} %",
-            }
-        )
-
-    system_info = {
-        "CPU_info": cpu_info,
-        "RAM_info": ram_info,
-        "GPU_info": gpu_info,
-    }
-    system_info_str = json.dumps(system_info, indent=4)
-    return system_info_str
-
-
-def get_computer_name():
-    system_name = platform.system()
-
-    # Windows
-    if system_name == "Windows":
-        return os.environ.get("COMPUTERNAME", socket.gethostname())
-
-    # macOS
-    elif system_name == "Darwin":
-        try:
-            return (
-                subprocess.check_output(["scutil", "--get", "ComputerName"])
-                .decode("utf-8")
-                .strip()
-            )
-        except subprocess.CalledProcessError:
-            return socket.gethostname()
-
-    # Linux
-    elif system_name == "Linux":
-        try:
-            return (
-                subprocess.check_output(["hostnamectl", "--static"])
-                .decode("utf-8")
-                .strip()
-            )
-        except subprocess.CalledProcessError:
-            return socket.gethostname()
-
-    # 其他系統（預設使用 socket.gethostname()）
-    return socket.gethostname()
-
-
-@dataclass
-class SQLType:
-    """SQLite 與 Python 資料型態對應表"""
-
-    sql_type: str
-    py_type: Type
-
-
-@dataclass
-class LoggerType:
-    """Logger 資料庫表格欄位名稱與資料型態對應表"""
-
-    field_name: str
-    sql_type: SQLType
-
-
-__SQL_TEXT = SQLType("TEXT", str)
-__SQL_INTEGER = SQLType("INTEGER", int)
-__SQL_REAL = SQLType("REAL", float)
 
 # log 資料庫表格欄位名稱與資料型態
-LOGER_TABE_INFO: List[LoggerType] = [
-    LoggerType("system_info", __SQL_TEXT),
-    LoggerType("host_info", __SQL_TEXT),
-    LoggerType("timestamp", __SQL_TEXT),
-    LoggerType("type", __SQL_TEXT),
-    LoggerType("tag", __SQL_TEXT),
-    LoggerType("function_file_name", __SQL_TEXT),
-    LoggerType("function_line_number", __SQL_INTEGER),
-    LoggerType("function_name", __SQL_TEXT),
-    LoggerType("args", __SQL_TEXT),
-    LoggerType("kwargs", __SQL_TEXT),
-    LoggerType("thread_name", __SQL_TEXT),
-    LoggerType("thread_id", __SQL_INTEGER),
-    LoggerType("pid", __SQL_INTEGER),
-    LoggerType("message", __SQL_TEXT),
-    LoggerType("extra_info", __SQL_TEXT),
-    LoggerType("function_time", __SQL_REAL),
-    LoggerType("traceback", __SQL_TEXT),
+"""
+LoggerType(field_name, SQLTyep)
+SQLType(SQL_type, python_type)
+
+base info: 基本資訊
+    level: log 類型
+        LOG: 正常 log
+        NOTSET: 無設定
+        TRACE: 追蹤
+        DEBUG: 除錯
+        INFO: 資訊
+        WARNING: 警告
+        ERROR: 錯誤
+        CRITICAL: 致命錯誤
+    timestamp: 時間戳
+    message: log 訊息
+system info: 系統資訊
+    system_info: 系統資訊
+        {
+        "Computer_info":{
+            computer_name: 電腦名稱,
+            user_name: 使用者名稱,
+            system_name: 系統名稱,
+            system_version: 系統版本,
+            system_release: 系統發行版本,
+            system_machine: 系統機器,
+            system_processor: 系統處理器
+            }
+        "CPU_info":{
+            usage: CPU 使用率,
+            physical_cores: CPU 實體核心數,
+            logical_cores: CPU 邏輯核心數,
+            current_frequency: 頻率,
+            min_frequency: 最小頻率,
+            max_frequency: 最大頻率,
+            }
+        "RAM_info":{
+            total: 總記憶體,
+            used: 使用記憶體,
+            free: 空閒記憶體,
+            percent: 記憶體使用率
+            }
+        "GPU_info":{
+            id: GPU ID,
+            name: GPU 名稱,
+            memory_total: 總記憶體,
+            memory_used: 使用記憶體,
+            memory_free: 空閒記憶體,
+            memory_percent: 記憶體使用率,
+            temperature: 溫度,
+            power: 功率,
+            utilization: 使用率
+            }
+        }
+    host_info: 主機資訊
+function info: 函數資訊
+    function_file_name: 函數所在檔案名稱
+    function_line_number: 函數所在行數
+    function_name: 函數名稱
+    args: 函數參數
+    kwargs: 函數關鍵字參數
+    return_value: 函數返回值
+    function_time: 函數執行時間
+thread info: 執行緒資訊
+    thread_name: 執行緒名稱
+    thread_id: 執行緒 ID
+    process_id: 執行緒 PID
+extra info: 額外資訊
+    tag: log 標籤
+    extra_info: 額外資訊
+traceback: 追蹤錯誤
+    exception_type: 錯誤類型
+    traceback: 追蹤錯誤
+"""
+LOGGER_TABLE_INFO: List[LoggerType] = [
+    LoggerType("system_info", SQL_TEXT),
+    LoggerType("host_info", SQL_TEXT),
+    LoggerType("timestamp", SQL_TEXT),
+    LoggerType("type", SQL_TEXT),
+    LoggerType("level", SQL_TEXT),
+    LoggerType("function_file_name", SQL_TEXT),
+    LoggerType("function_line_number", SQL_INTEGER),
+    LoggerType("function_name", SQL_TEXT),
+    LoggerType("args", SQL_TEXT),
+    LoggerType("kwargs", SQL_TEXT),
+    LoggerType("thread_name", SQL_TEXT),
+    LoggerType("thread_id", SQL_INTEGER),
+    LoggerType("process_id", SQL_INTEGER),
+    LoggerType("message", SQL_TEXT),
+    LoggerType("extra_info", SQL_TEXT),
+    LoggerType("function_time", SQL_REAL),
+    LoggerType("traceback", SQL_TEXT),
 ]
+
+
+class LoggerField:
+    def __init__(
+        self,
+        is_system_info=True,
+        is_host_info=True,
+        is_tag=True,
+        is_function_info=True,
+        is_thread_info=True,
+        is_traceback=True,
+    ):
+        self.__logger_table_info = LOGGER_TABLE_INFO.copy()
+        remove_fields = set()
+        if not is_system_info:
+            remove_fields.add("system_info")
+        if not is_host_info:
+            remove_fields.add("host_info")
+        if not is_tag:
+            remove_fields.add("tag")
+        if not is_function_info:
+            remove_fields.add(
+                (
+                    "function_file_name",
+                    "function_line_number",
+                    "function_name",
+                    "args",
+                    "kwargs",
+                )
+            )
+        if not is_thread_info:
+            remove_fields.add(("thread_name", "thread_id", "pid"))
+        if not is_traceback:
+            remove_fields.add("traceback")
+
+        self.__logger_table_info = [
+            field
+            for field in self.__logger_table_info
+            if field.field_name not in remove_fields
+        ]
+
+    def info(self):
+        return self.__logger_table_info
+
+    def field_name(self):
+        field_name = [field.field_name for field in self.__logger_table_info]
+        return field_name
+
+    def value(self, default_info: dict):
+        # base info
+        log_type = default_info.get("log_type", "NO_TYPE")
+        timestamp = default_info.get("timestamp", datetime.datetime.now().isoformat())
+        log_message = default_info.get("log_message", None)
+        # system info
+        system_info = default_info.get("system_info", get_system_info_json())
+        host_info = default_info.get("host_info", get_computer_name())
+        # function info
+        function_file_name = default_info.get("function_file_name", None)
+        function_line_number = default_info.get("function_line_number", None)
+        function_name = default_info.get("function_name", None)
+        args = default_info.get("args", None)
+        kwargs = default_info.get("kwargs", None)
+        return_value = default_info.get("return_value", None)
+        function_time = default_info.get("function_time", None)
+        # thread info
+        thread_name = default_info.get("thread_name", threading.current_thread().name)
+        thread_id = default_info.get("thread_id", threading.current_thread().ident)
+        process_id = default_info.get("process_id", os.getpid())
+        # extra info
+        tag = default_info.get("tag", None)
+        extra_info = default_info.get("extra_info", None)
+        # traceback
+        exception_type = default_info.get("exception_type", None)
+        traceback = default_info.get("traceback", None)
+        values = {
+            "base_info": [log_type, timestamp, log_message],
+            "system_info": [system_info, host_info],
+            "function_info": [
+                function_file_name,
+                function_line_number,
+                function_name,
+                args,
+                kwargs,
+                return_value,
+                function_time,
+            ],
+            "thread_info": [thread_name, thread_id, process_id],
+            "extra_info": [tag, extra_info],
+            "traceback": [exception_type, traceback],
+        }
+        return values
+
+
+class LoggerData:
+    def __init__(
+        self,
+        logger_field: LoggerField,
+        **kwargs,
+    ):
+        self.__logger_table_info = logger_field.info()
+
+        for field in self.__logger_table_info:
+            setattr(self, field.field_name, kwargs.get(field.field_name, None))
+
+    def get_data(self):
+        fields = {
+            field.field_name: getattr(self, field.field_name)
+            for field in self.__logger_table_info
+        }
+        return fields
+
+    def __repr__(self):
+        return f"LoggerData({self.get_data()})"
 
 
 class Logger:
@@ -183,19 +263,29 @@ class SQLiteLog:
         db_folder="log",
         wal=True,
         max_db_size=MAX_DB_SIZE,
+        logger_table_info=None,
     ):
+        if logger_table_info is None:
+            self.__LOGGER_TABLE_INFO = LOGGER_TABLE_INFO
+        else:
+            self.__LOGGER_TABLE_INFO = logger_table_info
+
+        # 設定 logger 資料庫
         self.computer_name = get_computer_name()
         if not os.path.exists(db_folder):
             os.makedirs(db_folder)
         self.db_size = 0
+        self.MAX_DB_SIZE = max_db_size
         self.db_name = os.path.join(db_folder, "log")
         self.wal = wal
-        self.MAX_DB_SIZE = max_db_size
+
+        # 產生對應的 loggger 資料庫
         self.current_db = self.get_last_log()
         self.conn = sqlite3.connect(self.current_db)
         self.cursor = self.conn.cursor()
         self.create_table()
 
+        # 註冊 python 退出時的函數
         atexit.register(self.close)
 
     def get_last_log(self):
@@ -222,16 +312,28 @@ class SQLiteLog:
                 self.create_table()
 
     def create_table(self):
-        self.field_name = [field.field_name for field in LOGER_TABE_INFO]
-        self.field_type = [field.sql_type.sql_type for field in LOGER_TABE_INFO]
+        """
+        根據 Logger 資料庫表格欄位名稱與資料型態對應表建立 logs 表格
+        """
+        self.field_name = [field.field_name for field in self.__LOGGER_TABLE_INFO]
+        self.field_type = [
+            field.sql_type.sql_type for field in self.__LOGGER_TABLE_INFO
+        ]
+        sql_table_info = ", ".join(
+            [
+                f"{field_name} {field_type}"
+                for field_name, field_type in zip(self.field_name, self.field_type)
+            ]
+        )
         self.cursor.execute(
             f"""
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {", ".join([f"{field} {field_type}" for field, field_type in zip(self.field_name, self.field_type)])}
+                {sql_table_info}
             )
             """
         )
+        # 設定資料庫為可以同時讀寫
         if self.wal:
             self.cursor.execute("PRAGMA journal_mode=WAL")
             self.conn.commit()
@@ -281,7 +383,7 @@ class SQLiteLog:
             start_time_timestamp = start_time.timestamp()
             start_time = start_time.isoformat()
 
-            system_info = get_system_info()
+            system_info = get_system_info_json()
 
             host_info = platform.uname()
             host_info = (
