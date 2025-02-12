@@ -5,7 +5,6 @@ import sqlite3
 import os
 import atexit
 import threading
-import platform
 import getpass
 import json
 import re
@@ -13,7 +12,6 @@ import re
 from typing import List
 
 from .sqlite_log_type import (
-    SQLType,
     LoggerType,
     SQL_TEXT,
     SQL_INTEGER,
@@ -153,7 +151,7 @@ class LoggerField:
                 )
             )
         if not is_thread_info:
-            remove_fields.add(("thread_name", "thread_id", "pid"))
+            remove_fields.add(("thread_name", "thread_id", "process_id"))
         if not is_traceback:
             remove_fields.add("traceback")
 
@@ -424,7 +422,7 @@ class SQLiteLog:
             current_thread = threading.current_thread()
             self.field_value["thread_name"] = current_thread.name
             self.field_value["thread_id"] = current_thread.ident
-            self.field_value["pid"] = os.getpid()
+            self.field_value["process_id"] = os.getpid()
             try:
                 self.field_value["level"] = level
                 result = func(*args, **kwargs)
