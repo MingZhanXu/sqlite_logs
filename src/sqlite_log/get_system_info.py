@@ -117,26 +117,33 @@ def get_computer_info():
     return computer_info
 
 
-def get_system_info():
-    computer_info = get_computer_info()
-    cpu_info = get_cpu_info()
-    memory_info = get_memory_info()
-    gpu_info = get_gpu_info()
-
-    system_info = {
-        "Computer_info": computer_info,
-        "CPU_info": cpu_info,
-        "RAM_info": memory_info,
-        "GPU_info": gpu_info,
+def get_system_info(is_computer=True, is_cpu=True, is_memory=True, is_gpu=True):
+    info_func = {
+        "computer_info": (is_computer, get_computer_info),
+        "cpu_info": (is_cpu, get_cpu_info),
+        "memory_info": (is_memory, get_memory_info),
+        "gpu_info": (is_gpu, get_gpu_info),
     }
+    system_info = {key: func() for key, (is_get, func) in info_func.items() if is_get}
     return system_info
 
 
-def get_system_info_json():
-    system_info = get_system_info()
+def get_system_info_json(is_computer=True, is_cpu=True, is_memory=True, is_gpu=True):
+    system_info = get_system_info(is_computer, is_cpu, is_memory, is_gpu)
     system_info_json = json.dumps(system_info, indent=4, ensure_ascii=False)
     return system_info_json
 
 
-def get_host_info():
-    host_info = {}
+def get_host_info(computer_name=get_computer_name(), user_name=getpass.getuser()):
+    host_info = platform.uname()
+    host_info = {
+        "computer_name": computer_name,
+        "user_name": user_name,
+        "system": host_info.system,
+        "node": host_info.node,
+        "release": host_info.release,
+        "version": host_info.version,
+        "machine": host_info.machine,
+        "processor": host_info.processor,
+    }
+    return host_info

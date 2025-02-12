@@ -8,6 +8,7 @@ import threading
 import platform
 import getpass
 import json
+import re
 
 from typing import List
 
@@ -18,10 +19,13 @@ from .sqlite_log_type import (
     SQL_INTEGER,
     SQL_REAL,
 )
-from .get_system_info import get_computer_name, get_system_info_json
+from .get_system_info import get_computer_name, get_system_info_json, get_host_info
 
 # 設定單個資料庫大小上限為 100 MB
 MAX_DB_SIZE = 100 * 1024 * 1024
+
+# 正則表達式"#*:* "
+TAG_REGULAR = r"#\S+?:\S+"
 
 
 # log 資料庫表格欄位名稱與資料型態
@@ -104,6 +108,7 @@ LOGGER_TABLE_INFO: List[LoggerType] = [
     LoggerType("host_info", SQL_TEXT),
     LoggerType("timestamp", SQL_TEXT),
     LoggerType("level", SQL_TEXT),
+    LoggerType("tag", SQL_TEXT),
     LoggerType("function_file_name", SQL_TEXT),
     LoggerType("function_line_number", SQL_INTEGER),
     LoggerType("function_name", SQL_TEXT),
@@ -272,6 +277,7 @@ class SQLiteLog:
 
         # 設定 logger 資料庫
         self.computer_name = get_computer_name()
+        self.user_name = getpass.getuser()
         if not os.path.exists(db_folder):
             os.makedirs(db_folder)
         self.db_size = 0
@@ -348,29 +354,46 @@ class SQLiteLog:
         self,
         func=None,
         *,
-        success_type="LOG",
-        log_tag="",
-        extra_info="",
         error_return=None,
     ):
         """
         tre_except 裝飾器，用於捕獲函數執行過程中的異常，並將異常信息記錄到數據庫中
         error_return: 當函數執行出現異常時，返回的默認值，可使用此參數來自定義異常時的返回值
+
+        使用func.__doc__傳遞參數：
+            level:log等級
+            error_level:錯誤等級
+            tag:log標籤
+            computer:是否記錄電腦資訊
+            cpu:是否記錄CPU資訊
+            memory:是否記錄記憶體資訊
+            gpu:是否記錄GPU資訊
         """
 
         # 帶參數調用
         if func is None:
             return functools.partial(
                 self.try_except,
-                success_type=success_type,
-                log_tag=log_tag,
-                extra_info=extra_info,
                 error_return=error_return,
             )
 
+        func_doc = func.__doc__
         self.field_value = dict()
-        self.field_value["tag"] = log_tag
-        self.field_value["extra_info"] = extra_info
+        func_tag = dict()
+        if func_doc:
+            func_tag = re.findall(TAG_REGULAR, func_doc)
+            func_tag = {
+                k.lstrip("#"): v for k, v in (item.split(":") for item in func_tag)
+            }
+
+        level = func_tag.get("level", "LOG")
+        error_level = func_tag.get("error_level", "ERROR")
+        self.field_value["tag"] = func_tag.get("tag", "")
+        self.field_value["extra_info"] = func_tag.get("extra_info", "")
+        is_computer = func_tag.get("computer", "True").lower() != "false"
+        is_cpu = func_tag.get("cpu", "True").lower() != "false"
+        is_memory = func_tag.get("memory", "True").lower() != "false"
+        is_gpu = func_tag.get("gpu", "True").lower() != "false"
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -379,43 +402,31 @@ class SQLiteLog:
             start_time = start_time.isoformat()
             self.field_value["timestamp"] = start_time
 
-            system_info = get_system_info_json()
+            system_info = get_system_info_json(
+                is_computer,
+                is_cpu,
+                is_memory,
+                is_gpu,
+            )
             self.field_value["system_info"] = system_info
 
-            host_info = platform.uname()
-            host_info = {
-                "computer_name": self.computer_name,
-                "user_name": getpass.getuser(),
-                "system_name": host_info.system,
-                "node": host_info.node,
-                "release": host_info.release,
-                "version": host_info.version,
-                "machine": host_info.machine,
-            }
+            host_info = get_host_info(self.computer_name, self.user_name)
             host_info_json = json.dumps(host_info, indent=4, ensure_ascii=False)
             self.field_value["host_info"] = host_info_json
 
             stack = traceback.extract_stack()[-2]
-            line_number = stack.lineno
-            file_name = stack.filename
-            name = func.__name__
-            args_str = str(args)
-            kwargs_str = str(kwargs)
-            self.field_value["function_file_name"] = file_name
-            self.field_value["function_line_number"] = line_number
-            self.field_value["function_name"] = name
-            self.field_value["args"] = args_str
-            self.field_value["kwargs"] = kwargs_str
+            self.field_value["function_file_name"] = stack.filename
+            self.field_value["function_line_number"] = stack.lineno
+            self.field_value["function_name"] = func.__name__
+            self.field_value["args"] = str(args)
+            self.field_value["kwargs"] = str(kwargs)
 
             current_thread = threading.current_thread()
-            thread_name = current_thread.name
-            thread_id = current_thread.ident
-            pid = os.getpid()
-            self.field_value["thread_name"] = thread_name
-            self.field_value["thread_id"] = thread_id
-            self.field_value["pid"] = pid
+            self.field_value["thread_name"] = current_thread.name
+            self.field_value["thread_id"] = current_thread.ident
+            self.field_value["pid"] = os.getpid()
             try:
-                self.field_value["level"] = success_type
+                self.field_value["level"] = level
                 result = func(*args, **kwargs)
                 end_time_timestamp = datetime.datetime.now().timestamp()
                 function_time = end_time_timestamp - start_time_timestamp
@@ -425,7 +436,7 @@ class SQLiteLog:
                 self.log_to_db()
                 return result
             except Exception as e:
-                self.field_value["level"] = "ERROR"
+                self.field_value["level"] = error_level
                 end_time_timestamp = datetime.datetime.now().timestamp()
                 function_time = end_time_timestamp - start_time_timestamp
                 error_msg = f"{e.__class__.__name__}: {str(e)}"

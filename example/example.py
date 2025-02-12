@@ -20,8 +20,9 @@ if __name__ == "__main__":
     print(delay())
 
     # 範例：如何使用裝飾器
-    @logger.try_except(log_tag="test")
+    @logger.try_except()
     def tag_division(a, b, c=3):
+        """#tag:try #gpu:false #cpu:false #memory:false #extra_info:hello"""
         return {"a": (a / b), "b": c}
 
     tag_division(99, 99)
