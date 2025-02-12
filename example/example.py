@@ -4,7 +4,6 @@ from src.sqlite_log import SQLiteLog, ReadLog, LoggerField
 from tqdm import tqdm
 
 if __name__ == "__main__":
-
     db_folder = os.path.join("logs", "test")
     logger_field = LoggerField(is_thread_info=False)
     logger = SQLiteLog(db_folder=db_folder, logger_table_info=logger_field.info())
@@ -47,11 +46,11 @@ if __name__ == "__main__":
     error_data = [{item: d[i] for i, item in enumerate(info)} for d in error_data]
     # for d in data:
     #     print(d)
-
+    #
     # for d in error_data:
     #     print(d)
 
-    print()
+    print(f"sucess:{len(data)}, error:{len(error_data)}")
     for key, value in error_data[0].items():
         if key == "traceback":
             value = value.replace("\\\\", "\\")

@@ -7,6 +7,7 @@ import atexit
 import threading
 import platform
 import getpass
+import json
 
 from typing import List
 
@@ -102,7 +103,6 @@ LOGGER_TABLE_INFO: List[LoggerType] = [
     LoggerType("system_info", SQL_TEXT),
     LoggerType("host_info", SQL_TEXT),
     LoggerType("timestamp", SQL_TEXT),
-    LoggerType("type", SQL_TEXT),
     LoggerType("level", SQL_TEXT),
     LoggerType("function_file_name", SQL_TEXT),
     LoggerType("function_line_number", SQL_INTEGER),
@@ -325,14 +325,8 @@ class SQLiteLog:
                 for field_name, field_type in zip(self.field_name, self.field_type)
             ]
         )
-        self.cursor.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {sql_table_info}
-            )
-            """
-        )
+        sql = f"CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, {sql_table_info})"
+        self.cursor.execute(sql)
         # 設定資料庫為可以同時讀寫
         if self.wal:
             self.cursor.execute("PRAGMA journal_mode=WAL")
@@ -340,18 +334,15 @@ class SQLiteLog:
         self.conn.commit()
         self.check_and_switch_db()
 
-    def log_to_db(self, messages):
+    def log_to_db(self):
         self.check_and_switch_db()
         field_str = f"{', '.join(self.field_name)}"
         input_datas = f"{', '.join(['?' for _ in range(len(self.field_name))])}"
-        self.cursor.execute(
-            f"""
-            INSERT INTO logs ({field_str}) VALUES ({input_datas})
-            """,
-            messages,
-        )
+        datas = [self.field_value.get(field, None) for field in self.field_name]
+        sql = f"INSERT INTO logs ({field_str}) VALUES ({input_datas})"
+        self.cursor.execute(sql, datas)
         self.conn.commit()
-        self.db_size += len(str(messages)) + 100
+        self.db_size += len(str(datas)) + 100
 
     def try_except(
         self,
@@ -377,24 +368,32 @@ class SQLiteLog:
                 error_return=error_return,
             )
 
+        self.field_value = dict()
+        self.field_value["tag"] = log_tag
+        self.field_value["extra_info"] = extra_info
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             start_time = datetime.datetime.now()
             start_time_timestamp = start_time.timestamp()
             start_time = start_time.isoformat()
+            self.field_value["timestamp"] = start_time
 
             system_info = get_system_info_json()
+            self.field_value["system_info"] = system_info
 
             host_info = platform.uname()
-            host_info = (
-                f"Computer  : {self.computer_name}\n"
-                f"User      : {getpass.getuser()}\n"
-                f"System    : {host_info.system}\n"
-                f"Node      : {host_info.node}\n"
-                f"Release   : {host_info.release}\n"
-                f"Version   : {host_info.version}\n"
-                f"Machine   : {host_info.machine}"
-            )
+            host_info = {
+                "computer_name": self.computer_name,
+                "user_name": getpass.getuser(),
+                "system_name": host_info.system,
+                "node": host_info.node,
+                "release": host_info.release,
+                "version": host_info.version,
+                "machine": host_info.machine,
+            }
+            host_info_json = json.dumps(host_info, indent=4, ensure_ascii=False)
+            self.field_value["host_info"] = host_info_json
 
             stack = traceback.extract_stack()[-2]
             line_number = stack.lineno
@@ -402,45 +401,38 @@ class SQLiteLog:
             name = func.__name__
             args_str = str(args)
             kwargs_str = str(kwargs)
+            self.field_value["function_file_name"] = file_name
+            self.field_value["function_line_number"] = line_number
+            self.field_value["function_name"] = name
+            self.field_value["args"] = args_str
+            self.field_value["kwargs"] = kwargs_str
 
             current_thread = threading.current_thread()
             thread_name = current_thread.name
             thread_id = current_thread.ident
             pid = os.getpid()
-            messages = [
-                file_name,
-                line_number,
-                name,
-                args_str,
-                kwargs_str,
-                thread_name,
-                thread_id,
-                pid,
-            ]
+            self.field_value["thread_name"] = thread_name
+            self.field_value["thread_id"] = thread_id
+            self.field_value["pid"] = pid
             try:
+                self.field_value["level"] = success_type
                 result = func(*args, **kwargs)
-                log_type = success_type
                 end_time_timestamp = datetime.datetime.now().timestamp()
                 function_time = end_time_timestamp - start_time_timestamp
                 message = f"result: {repr(result)}"
-                messages = (
-                    [system_info, host_info, start_time, log_type, log_tag]
-                    + messages
-                    + [message, extra_info, function_time, None]
-                )
-                self.log_to_db(messages)
+                self.field_value["message"] = message
+                self.field_value["function_time"] = function_time
+                self.log_to_db()
                 return result
             except Exception as e:
-                log_type = "ERROR"
+                self.field_value["level"] = "ERROR"
                 end_time_timestamp = datetime.datetime.now().timestamp()
                 function_time = end_time_timestamp - start_time_timestamp
                 error_msg = f"{e.__class__.__name__}: {str(e)}"
-                messages = (
-                    [system_info, host_info, start_time, log_type, log_tag]
-                    + messages
-                    + [error_msg, extra_info, function_time, traceback.format_exc()]
-                )
-                self.log_to_db(messages)
+                self.field_value["message"] = error_msg
+                self.field_value["function_time"] = function_time
+                self.field_value["traceback"] = traceback.format_exc()
+                self.log_to_db()
                 return error_return
 
         return wrapper
@@ -471,7 +463,7 @@ class ReadLog:
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                SELECT * FROM logs where type = ?
+                SELECT * FROM logs where level = ?
                 """,
                 (type,),
             )
@@ -486,7 +478,7 @@ class ReadLog:
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                SELECT * FROM logs WHERE type = 'LOG'
+                SELECT * FROM logs WHERE level = 'LOG'
                 """
             )
             return cursor.fetchall()
@@ -500,7 +492,7 @@ class ReadLog:
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                SELECT * FROM logs WhERE type = 'ERROR'
+                SELECT * FROM logs WhERE level = 'ERROR'
                 """
             )
             return cursor.fetchall()
