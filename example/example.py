@@ -4,7 +4,6 @@ from src.sqlite_log import SQLiteLog, ReadLog, LoggerField
 from tqdm import tqdm
 
 if __name__ == "__main__":
-
     db_folder = os.path.join("logs", "test")
     logger_field = LoggerField(is_thread_info=False)
     logger = SQLiteLog(db_folder=db_folder, logger_table_info=logger_field.info())
@@ -21,7 +20,7 @@ if __name__ == "__main__":
     print(delay())
 
     # 範例：如何使用裝飾器
-    @logger.try_except(log_tag="test")
+    @logger.try_except()
     def tag_division(a, b, c=3):
         return {"a": (a / b), "b": c}
 
@@ -39,8 +38,8 @@ if __name__ == "__main__":
 
     # 範例：如何讀取數據庫中的 log 及 error 訊息 (格式化版本)
     read_log = ReadLog(db_folder=db_folder)
-    data = read_log.get_logs()
-    error_data = read_log.get_error()
+    data = read_log.get_data(level="LOG")
+    error_data = read_log.get_data(level="ERROR")
     info = read_log.get_info()
     info = [name[1] for name in info]
     data = [{item: d[i] for i, item in enumerate(info)} for d in data]
