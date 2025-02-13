@@ -467,46 +467,18 @@ class ReadLog:
             print(f"Error: {e}")
             exit(-1)
 
-    def get_data(self, type):
+    def get_data(self, level):
         try:
             cursor = self.conn.cursor()
             cursor.execute(
                 """
                 SELECT * FROM logs where level = ?
                 """,
-                (type,),
+                (level,),
             )
             return cursor.fetchall()
         except sqlite3.OperationalError as e:
             print(f"get_data from {self.db_name}_{self.db_index}.db failed")
-            print(f"Error: {e}")
-            exit(-1)
-
-    def get_logs(self):
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                SELECT * FROM logs WHERE level = 'LOG'
-                """
-            )
-            return cursor.fetchall()
-        except sqlite3.OperationalError as e:
-            print(f"get_logs from {self.db_name}_{self.db_index}.db failed")
-            print(f"Error: {e}")
-            exit(-1)
-
-    def get_error(self):
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                SELECT * FROM logs WhERE level = 'ERROR'
-                """
-            )
-            return cursor.fetchall()
-        except sqlite3.OperationalError as e:
-            print(f"get_error from {self.db_name}_{self.db_index}.db failed")
             print(f"Error: {e}")
             exit(-1)
 
