@@ -236,3 +236,8 @@ class SQLiteLog(LoggerOutput):
         self.__conn.commit()
         if self.__auto_close:
             self.__conn.close()
+
+        if self.__check_db_size():
+            self.__db_index += 1
+            self.__db_file_update()
+            self.__create_db()
