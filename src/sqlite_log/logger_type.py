@@ -237,6 +237,9 @@ class SQLiteLog(LoggerOutput):
         if self.__auto_close:
             self.__conn.close()
 
+        # 更新資料庫大小(預估)
+        self.__db_size += len(str(value)) + 100
+
         if self.__check_db_size():
             self.__db_index += 1
             self.__db_file_update()
