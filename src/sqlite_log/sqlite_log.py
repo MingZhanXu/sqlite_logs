@@ -9,7 +9,7 @@ import getpass
 import json
 import re
 
-from typing import List
+from typing import List, Optional, Callable, Any
 
 from .sqlite_log_type import (
     LoggerType,
@@ -120,6 +120,23 @@ LOGGER_TABLE_INFO: List[LoggerType] = [
     LoggerType("function_time", SQL_REAL),
     LoggerType("traceback", SQL_TEXT),
 ]
+
+FUNC_TAG_DEFAULT_VALUE = {
+    "computer": True,
+    "cpu": True,
+    "memory": True,
+    "gpu": True,
+    "system": True,
+    "host": True,
+    "thread": True,
+    "traceback": True,
+    "extra": True,
+    "function": True,
+    "level": "LOG",
+    "tag": "",
+    "message": "",
+    "extra_info": "",
+}
 
 
 class LoggerField:
@@ -263,11 +280,17 @@ class Logger:
 class SQLiteLog:
     def __init__(
         self,
-        db_folder="log",
-        wal=True,
-        max_db_size=MAX_DB_SIZE,
-        logger_table_info=None,
-    ):
+        db_folder: str = "log",
+        wal: bool = True,
+        max_db_size: int = MAX_DB_SIZE,
+        logger_table_info: Optional[List[LoggerType]] = None,
+    ) -> None:
+        """
+        db_folder: 資料庫存放路徑
+        wal: 是否使用 WAL 模式（可同時對資料庫進行讀寫）
+        max_db_size: 單個資料庫最大大小
+        logger_table_info: Logger 資料庫表格欄位名稱與資料型態
+        """
         if logger_table_info is None:
             self.__LOGGER_TABLE_INFO = LOGGER_TABLE_INFO
         else:
@@ -292,7 +315,7 @@ class SQLiteLog:
         # 註冊 python 退出時的函數
         atexit.register(self.close)
 
-    def get_last_log(self):
+    def get_last_log(self) -> str:
         """
         獲取最新的 log 檔案
         """
@@ -301,7 +324,7 @@ class SQLiteLog:
             db_index += 1
         return f"{self.db_name}_{db_index}.db"
 
-    def check_and_switch_db(self):
+    def check_and_switch_db(self) -> None:
         """
         檢查 log 檔案大小是否超過最大限制，如果超過，則切換至下一個 log 檔案
         """
@@ -315,7 +338,7 @@ class SQLiteLog:
                 self.cursor = self.conn.cursor()
                 self.create_table()
 
-    def create_table(self):
+    def create_table(self) -> None:
         """
         根據 Logger 資料庫表格欄位名稱與資料型態對應表建立 logs 表格
         """
@@ -338,7 +361,7 @@ class SQLiteLog:
         self.conn.commit()
         self.check_and_switch_db()
 
-    def log_to_db(self):
+    def log_to_db(self) -> None:
         self.check_and_switch_db()
         field_str = f"{', '.join(self.field_name)}"
         input_datas = f"{', '.join(['?' for _ in range(len(self.field_name))])}"
@@ -348,12 +371,80 @@ class SQLiteLog:
         self.conn.commit()
         self.db_size += len(str(datas)) + 100
 
+    def __set_system_info(self, func_tag: List[str]) -> None:
+        is_computer = func_tag.get("computer", True)
+        is_cpu = func_tag.get("cpu", True)
+        is_memory = func_tag.get("memory", True)
+        is_gpu = func_tag.get("gpu", True)
+        self.field_value["system_info"] = get_system_info_json(
+            is_computer, is_cpu, is_memory, is_gpu
+        )
+
+    def __set_host_info(self) -> None:
+        host_info = get_host_info(self.computer_name, self.user_name)
+        host_info_json = json.dumps(host_info, indent=4, ensure_ascii=False)
+        self.field_value["host_info"] = host_info_json
+
+    def __set_function_info(
+        self,
+        func: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        function_time: Optional[float] = None,
+    ) -> None:
+        stack = traceback.extract_stack()[-2]
+        self.field_value["function_file_name"] = stack.filename
+        self.field_value["function_line_number"] = stack.lineno
+        self.field_value["function_name"] = func.__name__
+        self.field_value["args"] = str(args)
+        self.field_value["kwargs"] = str(kwargs)
+        self.field_value["function_time"] = function_time
+
+    def __set_thread_info(self) -> None:
+        current_thread = threading.current_thread()
+        self.field_value["thread_name"] = current_thread.name
+        self.field_value["thread_id"] = current_thread.ident
+        self.field_value["process_id"] = os.getpid()
+
+    def __set_traceback(self, e: Exception) -> None:
+        self.field_value["traceback"] = traceback.format_exc()
+        self.field_value["exception_type"] = e.__class__.__name__
+
+    def __parse_func_doc(self, func: Callable[..., Any]) -> dict[str, str]:
+        func_doc = func.__doc__
+        func_tag = FUNC_TAG_DEFAULT_VALUE.copy()
+        if func_doc:
+            func_re = re.findall(TAG_REGULAR, func_doc)
+            func_re_tag = {
+                k.lstrip("#"): v for k, v in (item.split(":") for item in func_re)
+            }
+            func_tag.update(func_re_tag)
+
+        return func_tag
+
+    def __set_log_metadata(self, func_tag: dict[str, str]) -> None:
+        """設定system、host、thread資訊"""
+        if func_tag["system"]:
+            self.__set_system_info(func_tag)
+        if func_tag["host"]:
+            self.__set_host_info()
+        if func_tag["thread"]:
+            self.__set_thread_info()
+
+    def __set_timestamp(self) -> float:
+        """設定並獲取時間戳"""
+        start_time = datetime.datetime.now()
+        start_time_timestamp = start_time.timestamp()
+        start_time = start_time.isoformat()
+        self.field_value["timestamp"] = start_time
+        return start_time_timestamp
+
     def try_except(
         self,
-        func=None,
+        func: Optional[Callable[..., Any]] = None,
         *,
-        error_return=None,
-    ):
+        error_return: Any = None,
+    ) -> Any:
         """
         tre_except 裝飾器，用於捕獲函數執行過程中的異常，並將異常信息記錄到數據庫中
         error_return: 當函數執行出現異常時，返回的默認值，可使用此參數來自定義異常時的返回值
@@ -375,90 +466,68 @@ class SQLiteLog:
                 error_return=error_return,
             )
 
-        func_doc = func.__doc__
         self.field_value = dict()
-        func_tag = dict()
-        if func_doc:
-            func_tag = re.findall(TAG_REGULAR, func_doc)
-            func_tag = {
-                k.lstrip("#"): v for k, v in (item.split(":") for item in func_tag)
-            }
+        func_tag = self.__parse_func_doc(func)
 
+        # 獲取傳遞參數值
         level = func_tag.get("level", "LOG")
         error_level = func_tag.get("error_level", "ERROR")
         self.field_value["tag"] = func_tag.get("tag", "")
         self.field_value["extra_info"] = func_tag.get("extra_info", "")
-        is_computer = func_tag.get("computer", "True").lower() != "false"
-        is_cpu = func_tag.get("cpu", "True").lower() != "false"
-        is_memory = func_tag.get("memory", "True").lower() != "false"
-        is_gpu = func_tag.get("gpu", "True").lower() != "false"
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            start_time = datetime.datetime.now()
-            start_time_timestamp = start_time.timestamp()
-            start_time = start_time.isoformat()
-            self.field_value["timestamp"] = start_time
+            # 設定基本資訊
+            start_time_timestamp = self.__set_timestamp()
+            self.__set_log_metadata(func_tag)
+            return_value = None
+            success = True
 
-            system_info = get_system_info_json(
-                is_computer,
-                is_cpu,
-                is_memory,
-                is_gpu,
-            )
-            self.field_value["system_info"] = system_info
-
-            host_info = get_host_info(self.computer_name, self.user_name)
-            host_info_json = json.dumps(host_info, indent=4, ensure_ascii=False)
-            self.field_value["host_info"] = host_info_json
-
-            stack = traceback.extract_stack()[-2]
-            self.field_value["function_file_name"] = stack.filename
-            self.field_value["function_line_number"] = stack.lineno
-            self.field_value["function_name"] = func.__name__
-            self.field_value["args"] = str(args)
-            self.field_value["kwargs"] = str(kwargs)
-
-            current_thread = threading.current_thread()
-            self.field_value["thread_name"] = current_thread.name
-            self.field_value["thread_id"] = current_thread.ident
-            self.field_value["process_id"] = os.getpid()
             try:
-                self.field_value["level"] = level
                 result = func(*args, **kwargs)
-                end_time_timestamp = datetime.datetime.now().timestamp()
-                function_time = end_time_timestamp - start_time_timestamp
                 message = f"result: {repr(result)}"
                 self.field_value["message"] = message
-                self.field_value["function_time"] = function_time
-                self.log_to_db()
-                return result
+                return_value = result
             except Exception as e:
-                self.field_value["level"] = error_level
+                success = False
+                error_return_type = type(error_return)
+                error_return_info = (
+                    f"name: {error_return.__name__}"
+                    if callable(error_return)
+                    else f"value: {repr(error_return)}"
+                )
+                message = (
+                    f"Error: {e.__class__.__name__}: {str(e)}"
+                    f"\nReturn: type: {error_return_type}, {error_return_info}"
+                )
+                self.field_value["message"] = message
+                if func_tag["traceback"]:
+                    self.__set_traceback(e)
+                return_value = error_return
+            finally:
                 end_time_timestamp = datetime.datetime.now().timestamp()
                 function_time = end_time_timestamp - start_time_timestamp
-                error_msg = f"{e.__class__.__name__}: {str(e)}"
-                self.field_value["message"] = error_msg
                 self.field_value["function_time"] = function_time
-                self.field_value["traceback"] = traceback.format_exc()
+                self.field_value["level"] = level if success else error_level
+                if func_tag["function"]:
+                    self.__set_function_info(func, args, kwargs, function_time)
                 self.log_to_db()
-                return error_return
+            return return_value
 
         return wrapper
 
-    def close(self):
+    def close(self) -> None:
         self.conn.commit()
         self.conn.close()
 
 
 class ReadLog:
-    def __init__(self, db_folder, db_index=1):
+    def __init__(self, db_folder: str = "log", db_index: int = 1):
         self.db_name = os.path.join(db_folder, "log")
         self.db_index = db_index
         if not os.path.exists(f"{self.db_name}_{db_index}.db"):
             print(f"{self.db_name}_{db_index}.db not exists")
             exit(-1)
-
         try:
             self.conn = sqlite3.connect(f"{self.db_name}_{db_index}.db")
             atexit.register(self.close)
@@ -467,15 +536,12 @@ class ReadLog:
             print(f"Error: {e}")
             exit(-1)
 
-    def get_data(self, level):
+    def get_data(self, level: str):
         try:
             cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                SELECT * FROM logs where level = ?
-                """,
-                (level,),
-            )
+            # 搜尋指定 level 的 log 資料
+            sql = "SELECT * FROM logs where level = ?"
+            cursor.execute(sql, (level,))
             return cursor.fetchall()
         except sqlite3.OperationalError as e:
             print(f"get_data from {self.db_name}_{self.db_index}.db failed")
@@ -488,11 +554,9 @@ class ReadLog:
         """
         try:
             cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                PRAGMA table_info(logs)
-                """
-            )
+            # 獲取 logs 表格的資訊
+            sql = "PRAGMA table_info(logs)"
+            cursor.execute(sql)
             return cursor.fetchall()
         except sqlite3.OperationalError as e:
             print(f"get_info from {self.db_name}_{self.db_index}.db failed")
