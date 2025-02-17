@@ -14,6 +14,7 @@ if __name__ == "__main__":
 
     @logger.try_except(error_return=error())
     def delay():
+        """#tag:delay #cpu:false #traceback:false"""
         time.sleep(1)
         raise
 
@@ -47,7 +48,7 @@ if __name__ == "__main__":
 
     # 格式化輸出
     for key, value in error_data[0].items():
-        if key == "traceback":
+        if key == "traceback" and value:
             value = value.replace("\\\\", "\\")
         print(f"{key}: {value}")
     print()

@@ -122,17 +122,18 @@ LOGGER_TABLE_INFO: List[LoggerType] = [
 ]
 
 FUNC_TAG_DEFAULT_VALUE = {
-    "computer": True,
-    "cpu": True,
-    "memory": True,
-    "gpu": True,
-    "system": True,
-    "host": True,
-    "thread": True,
-    "traceback": True,
-    "extra": True,
-    "function": True,
+    "computer": "True",
+    "cpu": "True",
+    "memory": "True",
+    "gpu": "True",
+    "system": "True",
+    "host": "True",
+    "thread": "True",
+    "traceback": "True",
+    "extra": "True",
+    "function": "True",
     "level": "LOG",
+    "error_level": "ERROR",
     "tag": "",
     "message": "",
     "extra_info": "",
@@ -372,10 +373,11 @@ class SQLiteLog:
         self.db_size += len(str(datas)) + 100
 
     def __set_system_info(self, func_tag: List[str]) -> None:
-        is_computer = func_tag.get("computer", True)
-        is_cpu = func_tag.get("cpu", True)
-        is_memory = func_tag.get("memory", True)
-        is_gpu = func_tag.get("gpu", True)
+        # 這些資訊皆為bool值，所以不會有錯誤
+        is_computer = func_tag["computer"]
+        is_cpu = func_tag["cpu"]
+        is_memory = func_tag["memory"]
+        is_gpu = func_tag["gpu"]
         self.field_value["system_info"] = get_system_info_json(
             is_computer, is_cpu, is_memory, is_gpu
         )
@@ -424,6 +426,22 @@ class SQLiteLog:
 
     def __set_log_metadata(self, func_tag: dict[str, str]) -> None:
         """設定system、host、thread資訊"""
+        key = [
+            "system",
+            "host",
+            "thread",
+            "cpu",
+            "memory",
+            "gpu",
+            "computer",
+            "traceback",
+            "extra",
+            "function",
+        ]
+        for k in key:
+            if func_tag[k] != "True":
+                func_tag[k] = False
+
         if func_tag["system"]:
             self.__set_system_info(func_tag)
         if func_tag["host"]:
@@ -470,10 +488,10 @@ class SQLiteLog:
         func_tag = self.__parse_func_doc(func)
 
         # 獲取傳遞參數值
-        level = func_tag.get("level", "LOG")
-        error_level = func_tag.get("error_level", "ERROR")
-        self.field_value["tag"] = func_tag.get("tag", "")
-        self.field_value["extra_info"] = func_tag.get("extra_info", "")
+        level = func_tag["level"]
+        error_level = func_tag["error_level"]
+        self.field_value["tag"] = func_tag["tag"]
+        self.field_value["extra_info"] = func_tag["extra_info"]
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
