@@ -194,12 +194,16 @@ class SQLiteLog(LoggerOutput):
         self.__conn = sqlite3.connect(self.__db_file)
         self.__cursor = self.__conn.cursor()
 
+    def __auto_close_db(self) -> None:
+        """使自動關閉資料庫"""
+        if self.__auto_close:
+            self.__conn.close()
+
     def __create_db(self) -> None:
         """建立資料庫"""
         self.__conn_db()
         self.__create_table()
-        if self.__auto_close:
-            self.__conn.close()
+        self.__auto_close_db()
 
     def __init_db(self) -> None:
         """初始化資料庫"""
@@ -219,8 +223,7 @@ class SQLiteLog(LoggerOutput):
         self.__cursor.execute(SQLiteLog.__CHECK_TABLE_SQL)
         if not self.__cursor.fetchone():
             self.__create_table()
-        if self.__auto_close:
-            self.__conn.close()
+        self.__auto_close_db()
 
     def output(self, data: LoggerInfo):
         data = {
@@ -229,13 +232,13 @@ class SQLiteLog(LoggerOutput):
             if data.get_is_record()[key]
         }
         field = ", ".join(data.keys())
-        value = ", ".join(f"'{value}'" for value in data.values())
-        sql = f"INSERT INTO logs ({field}) VALUES ({value})"
+        placeholder = ", ".join("?" for _ in data.keys())
+        value = tuple(data.values())
+        sql = f"INSERT INTO logs ({field}) VALUES ({placeholder})"
         self.__conn_db()
-        self.__cursor.execute(sql)
+        self.__cursor.execute(sql, tuple(data.values()))
         self.__conn.commit()
-        if self.__auto_close:
-            self.__conn.close()
+        self.__auto_close_db()
 
         # 更新資料庫大小(預估)
         self.__db_size += len(str(value)) + 100
@@ -244,3 +247,4 @@ class SQLiteLog(LoggerOutput):
             self.__db_index += 1
             self.__db_file_update()
             self.__create_db()
+            self.__auto_close_db()
