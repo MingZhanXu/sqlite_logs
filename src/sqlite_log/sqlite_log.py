@@ -121,6 +121,7 @@ LOGGER_TABLE_INFO: List[LoggerType] = [
     LoggerType("traceback", SQL_TEXT),
 ]
 
+# 預設函數標籤值
 FUNC_TAG_DEFAULT_VALUE = {
     "computer": "True",
     "cpu": "True",
@@ -279,6 +280,66 @@ class Logger:
 
 
 class SQLiteLog:
+    """
+    SQLiteLog 負責記錄日誌。
+    Args:
+        db_folder (str): 資料庫存放路徑。
+        wal (bool, optional): 是否使用 WAL 模式（可同時對資料庫進行讀寫）。預設為 False。
+        max_db_size (int, optional): 單個資料庫最大大小（單位：位元組）。預設無限制。
+        logger_table_info (List[LoggerType], optional): Logger 資料庫表格欄位名稱與資料型態。預設為 None。
+    使用方法:
+        1. 創建 SQLiteLog 實例:
+            ```python
+            db_folder = "log"
+            logger = SQLiteLog(db_folder=db_folder)
+            ```
+        2. 使用 `try_except` 裝飾器裝飾函數:
+            ```python
+            @logger.try_except()
+            def func():
+                pass
+            ```
+        3. 執行函數:
+            ```python
+            func()
+            ```
+        4. 查看 log 資料庫:
+            ```python
+            read_log = ReadLog(db_folder=db_folder)
+            data = read_log.get_data(level="LOG")
+            error_data = read_log.get_data(level="ERROR")
+            info = read_log.get_info()
+            ```
+    參數傳遞方式:
+        1. 使用 `func.__doc__` 傳遞參數:
+            ```python
+            @logger.try_except()
+            def func():
+                \"\"\"#tag:value\"\"\"
+                pass
+            ```
+        2. tag參數格式:
+            - 格式: `#tag:value`
+            - 參數選項：
+                | 參數名稱      | 類型    | 說明 |
+                |--------------|--------|--------------------------------|
+                | computer     | bool   | 是否記錄電腦資訊 (預設 True，非 True 則 False) |
+                | cpu          | bool   | 是否記錄 CPU 資訊 (預設 True，非 True 則 False) |
+                | memory       | bool   | 是否記錄記憶體資訊 (預設 True，非 True 則 False) |
+                | gpu          | bool   | 是否記錄 GPU 資訊 (預設 True，非 True 則 False) |
+                | system       | bool   | 是否記錄系統資訊 (預設 True，非 True 則 False) |
+                | host         | bool   | 是否記錄主機資訊 (預設 True，非 True 則 False) |
+                | thread       | bool   | 是否記錄執行緒資訊 (預設 True，非 True 則 False) |
+                | traceback    | bool   | 是否記錄追蹤錯誤 (預設 True，非 True 則 False) |
+                | extra        | bool   | 是否記錄額外資訊 (預設 True，非 True 則 False) |
+                | function     | bool   | 是否記錄函數資訊 (預設 True，非 True 則 False) |
+                | level        | str    | log 等級 (預設 `"LOG"`) |
+                | error_level  | str    | 錯誤等級 (預設 `"ERROR"`) |
+                | tag          | str    | log 標籤 (預設 `""`) |
+                | message      | str    | log 訊息 (預設 `""`) |
+                | extra_info   | str    | 額外資訊 (預設 `""`) |
+    """
+
     def __init__(
         self,
         db_folder: str = "log",
@@ -286,12 +347,6 @@ class SQLiteLog:
         max_db_size: int = MAX_DB_SIZE,
         logger_table_info: Optional[List[LoggerType]] = None,
     ) -> None:
-        """
-        db_folder: 資料庫存放路徑
-        wal: 是否使用 WAL 模式（可同時對資料庫進行讀寫）
-        max_db_size: 單個資料庫最大大小
-        logger_table_info: Logger 資料庫表格欄位名稱與資料型態
-        """
         if logger_table_info is None:
             self.__LOGGER_TABLE_INFO = LOGGER_TABLE_INFO
         else:
