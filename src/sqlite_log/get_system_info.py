@@ -6,8 +6,12 @@ import socket
 import subprocess
 import os
 import getpass
+from typing import Dict, Optional, Literal
 
 __GB_SIZE = 1024**3
+
+SystemClass = Literal["computer", "cpu", "memory", "gpu"]
+SystemInfoConfig = Dict[SystemClass, bool]
 
 
 def get_cpu_info():
@@ -147,3 +151,55 @@ def get_host_info(computer_name=get_computer_name(), user_name=getpass.getuser()
         "processor": host_info.processor,
     }
     return host_info
+
+
+class SystemInfo:
+    DEFAULT_CONFIG = {
+        "computer": True,
+        "cpu": True,
+        "memory": True,
+        "gpu": True,
+    }
+
+    def __init__(self, config: Optional[SystemInfoConfig] = None):
+        self.__config = SystemInfo.DEFAULT_CONFIG.copy()
+        if config:
+            self.__config.update(config)
+        self.__data = {k: dict() for k in self.__config.keys() if k == True}
+        if self.__config["computer"]:
+            self.__data["computer"] = get_computer_info()
+            self.__data["computer_json"] = json.dumps(
+                self.__data["computer"], indent=4, ensure_ascii=False
+            )
+
+    def get_computer_info(self) -> Optional[str]:
+        if self.__config["computer"]:
+            return self.__data["computer_json"]
+        return None
+
+    def get_cpu_info(self) -> Optional[str]:
+        if self.__config["cpu"]:
+            self.__data["cpu"] = get_cpu_info()
+            self.__data["cpu_json"] = json.dumps(
+                self.__data["cpu"], indent=4, ensure_ascii=False
+            )
+            return self.__data["cpu_json"]
+        return None
+
+    def get_memory_info(self) -> Optional[str]:
+        if self.__config["memory"]:
+            self.__data["memory"] = get_memory_info()
+            self.__data["memory_json"] = json.dumps(
+                self.__data["memory"], indent=4, ensure_ascii=False
+            )
+            return self.__data["memory_json"]
+        return None
+
+    def get_gpu_info(self) -> Optional[str]:
+        if self.__config["gpu"]:
+            self.__data["gpu"] = get_gpu_info()
+            self.__data["gpu_json"] = json.dumps(
+                self.__data["gpu"], indent=4, ensure_ascii=False
+            )
+            return self.__data["gpu_json"]
+        return None
