@@ -10,11 +10,23 @@ from typing import Dict, Optional, Literal
 
 __GB_SIZE = 1024**3
 
-SystemClass = Literal["computer", "cpu", "memory", "gpu"]
+SystemClass = Literal["computer", "cpu", "memory", "gpu", "host"]
 SystemInfoConfig = Dict[SystemClass, bool]
 
 
 def get_cpu_info():
+    """
+    獲取 CPU 資訊。
+
+    回傳:
+        dict: 包含以下 CPU 詳細資訊的字典：
+            - usage (str): CPU 使用率百分比。
+            - physical_cores (int): 實體核心數。
+            - logical_cores (int): 邏輯核心數。
+            - current_frequency (str, 選填): 目前 CPU 頻率 (MHz)。
+            - min_frequency (str, 選填): 最小 CPU 頻率 (MHz)。
+            - max_frequency (str, 選填): 最大 CPU 頻率 (MHz)。
+    """
     cpu_usage = f"{psutil.cpu_percent(interval=0)}%"
     cpu_physical_cores = psutil.cpu_count(logical=False)
     cpu_logical_cores = psutil.cpu_count(logical=True)
@@ -32,6 +44,16 @@ def get_cpu_info():
 
 
 def get_memory_info():
+    """
+    獲取記憶體 (RAM) 資訊。
+
+    回傳:
+        dict: 包含以下記憶體詳細資訊的字典：
+            - total (str): 總記憶體大小 (GB)。
+            - used (str): 使用中記憶體大小 (GB)。
+            - free (str): 空閒記憶體大小 (GB)。
+            - percent (str): 記憶體使用率百分比。
+    """
     memory = psutil.virtual_memory()
     ram_total = f"{memory.total / __GB_SIZE:.2f} GB"
     ram_used = f"{memory.used / __GB_SIZE:.2f} GB"
@@ -47,6 +69,21 @@ def get_memory_info():
 
 
 def get_gpu_info():
+    """
+    獲取 GPU 資訊，若此list為空則未檢測到 GPU。
+
+    回傳:
+        dict: 包含以下 GPU 詳細資訊的字典：
+            - id (int): GPU 編號。
+            - name (str): GPU 名稱。
+            - memory_total (str): 總記憶體大小 (GB)。
+            - memory_used (str): 使用中記憶體大小 (GB)。
+            - memory_free (str): 空閒記憶體大小 (GB)。
+            - memory_percent (str): 記憶體使用率百分比。
+            - temperature (str): 溫度 (°C)。
+            - power (str): 功耗 (W)。
+            - utilization (str): 使用率百分比。
+    """
     gpus = GPUtil.getGPUs()
     gpu_info = []
     for gpu in gpus:
@@ -67,6 +104,12 @@ def get_gpu_info():
 
 
 def get_computer_name():
+    """
+    獲取電腦名稱。
+
+    回傳:
+        str: 電腦名稱。
+    """
     system_name = platform.system()
 
     # Windows
@@ -100,6 +143,19 @@ def get_computer_name():
 
 
 def get_computer_info():
+    """
+    獲取電腦資訊。
+
+    回傳:
+        dict: 包含以下電腦詳細資訊的字典：
+            - computer_name (str): 電腦名稱。
+            - user_name (str): 使用者名稱。
+            - system_name (str): 作業系統名稱。
+            - system_version (str): 作業系統版本。
+            - system_release (str): 作業系統發行版本。
+            - system_machine (str): 系統架構。
+            - system_processor (str): 處理器資訊。
+    """
     computer_name = get_computer_name()
     user_name = getpass.getuser()
     system_info = platform.uname()
@@ -122,6 +178,22 @@ def get_computer_info():
 
 
 def get_system_info(is_computer=True, is_cpu=True, is_memory=True, is_gpu=True):
+    """
+    獲取系統資訊。
+
+    參數:
+        is_computer (bool): 是否獲取電腦資訊。
+        is_cpu (bool): 是否獲取 CPU 資訊。
+        is_memory (bool): 是否獲取記憶體資訊。
+        is_gpu (bool): 是否獲取 GPU 資訊。
+
+    回傳:
+        dict: 包含系統資訊的字典。
+        computer_info (dict): 電腦資訊。
+        cpu_info (dict): CPU 資訊。
+        memory_info (dict): 記憶體資訊。
+        gpu_info (dict): GPU 資訊。
+    """
     info_func = {
         "computer_info": (is_computer, get_computer_info),
         "cpu_info": (is_cpu, get_cpu_info),
@@ -133,12 +205,42 @@ def get_system_info(is_computer=True, is_cpu=True, is_memory=True, is_gpu=True):
 
 
 def get_system_info_json(is_computer=True, is_cpu=True, is_memory=True, is_gpu=True):
+    """
+    獲取系統資訊的 JSON 格式。
+
+    參數:
+        is_computer (bool): 是否獲取電腦資訊。
+        is_cpu (bool): 是否獲取 CPU 資訊。
+        is_memory (bool): 是否獲取記憶體資訊。
+        is_gpu (bool): 是否獲取 GPU 資訊。
+
+    回傳:
+        str: 包含系統資訊的 JSON 字串。
+    """
     system_info = get_system_info(is_computer, is_cpu, is_memory, is_gpu)
     system_info_json = json.dumps(system_info, indent=4, ensure_ascii=False)
     return system_info_json
 
 
 def get_host_info(computer_name=get_computer_name(), user_name=getpass.getuser()):
+    """
+    獲取主機資訊。
+
+    參數:
+        computer_name (str): 電腦名稱。
+        user_name (str): 使用者名稱。
+
+    回傳:
+        dict: 包含以下主機詳細資訊的字典：
+            - computer_name (str): 電腦名稱。
+            - user_name (str): 使用者名稱。
+            - system (str): 作業系統名稱。
+            - node (str): 網路節點名稱。
+            - release (str): 作業系統發行版本。
+            - version (str): 作業系統版本。
+            - machine (str): 系統架構。
+            - processor (str): 處理器資訊。
+    """
     host_info = platform.uname()
     host_info = {
         "computer_name": computer_name,
@@ -202,4 +304,16 @@ class SystemInfo:
                 self.__data["gpu"], indent=4, ensure_ascii=False
             )
             return self.__data["gpu_json"]
+        return None
+
+    def get_host_info(self) -> Optional[str]:
+        if self.__config["host"]:
+            self.__data["host"] = get_host_info(
+                computer_name=self.__data["computer"]["computer_name"],
+                user_name=self.__data["computer"]["user_name"],
+            )
+            self.__data["host_json"] = json.dumps(
+                self.__data["host"], indent=4, ensure_ascii=False
+            )
+            return self.__data["host_json"]
         return None
