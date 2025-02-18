@@ -1,33 +1,52 @@
 import os
 import sqlite3
 
-from typing import Dict, Optional, List, Any, Union
+from typing import Dict, Optional, List, Any, Union, Literal
 
-FIELD_GROUP: Dict[str, List[str]] = {
-    "Base": ["level", "timestamp", "message"],
-    "Function": [
+LoggerField = List[
+    Literal[
+        # Base
+        "level",
+        "timestamp",
+        "message",
+        # Function
         "function_name",
         "args",
         "kwargs",
         "function_time",
-        "return",
+        "function_return",
+        "error_type",
         "traceback",
-    ],
-    "Thread": ["thread_name", "thread_id", "process_id"],
-    "System": ["computer", "cpu", "memory", "gpu", "host"],
+        # Thread
+        "thread_name",
+        "thread_id",
+        "process_id",
+        # System
+        "computer",
+        "cpu",
+        "memory",
+        "gpu",
+        "host",
+    ]
+]
+LoggerGroup = Literal["base", "function", "thread", "system"]
+FIELD_GROUP: Dict[LoggerGroup, List[LoggerField]] = {
+    "base": ["level", "timestamp", "message"],
+    "function": ["function_name", "args", "kwargs", "function_time", "function_return"],
+    "thread": ["thread_name", "thread_id", "process_id"],
+    "system": ["computer", "cpu", "memory", "gpu", "host"],
 }
-FIELD_IS_RECORD = {
-    value: True for key in FIELD_GROUP.keys() for value in FIELD_GROUP[key]
-}
-FIELD_DEFAULT_VALUE: Dict[str, Union[float, str]] = {
+FIELD_DEFAULT_VALUE: Dict[str, Optional[Union[str, float, int]]] = {
     "level": "LOG",
     "timestamp": 0.0,
     "message": "",
+    "tag": "",
     "function_name": "",
     "args": "",
     "kwargs": "",
     "function_time": 0.0,
-    "return": "",
+    "function_return": "",
+    "error_type": "",
     "traceback": "",
     "thread_name": "",
     "thread_id": 0,
@@ -39,30 +58,97 @@ FIELD_DEFAULT_VALUE: Dict[str, Union[float, str]] = {
     "host": "",
 }
 
+# 設訂標記的值
+LoggerMark = Literal[
+    "level",
+    "tag",
+    "message",
+]
+# True: 記錄, False: 不記錄
+LoggerRecord = Literal[
+    "function",
+    "thread",
+    "computer",
+    "cpu",
+    "memory",
+    "gpu",
+    "host",
+]
+LoggerTag = Union[LoggerMark, LoggerRecord]
+LoggerTagValue = Dict[LoggerTag, str]
+
+DEFAULT_LOGGER_TAG: LoggerTagValue = {
+    "level": "LOG",
+    "tag": "",
+    "message": "",
+    "function": "true",
+    "thread": "true",
+    "computer": "true",
+    "cpu": "true",
+    "memory": "true",
+    "gpu": "true",
+    "host": "true",
+}
+
+LoggerConfig = Literal[
+    "level",
+    "tag",
+    "message",
+]
+
 
 class LoggerInfo:
-    def __init__(self, remove_record: Optional[List[str]] = None):
+    """
+    用於傳遞所記錄的資料。
 
-        self.__field_group: Dict[str, List[str]] = FIELD_GROUP.copy()
-        self.__is_default_record = FIELD_IS_RECORD.copy()
+    Args:
+        config (List[LoggerTagValue]):
+            要設定的欄位。
+    Methods:
+        reset_data() -> None:
+            重置資料，需在每次記錄完後呼叫。
+        get_is_record() -> dict[str, bool]:
+            獲取欄位是否應該被記錄。
+        get_field_value() -> dict[str, Any]:
+            獲取所有欄位的值。
+        set_field_value(field: str, value: Any) -> None:
+            設定特定欄位的值，用於 Logger 資料傳遞。
+        set_is_record(field: str, is_record: bool) -> None:
+            設定特定欄位是否記錄，用於傳遞給 Logger。
+    """
+
+    def __init__(self, config: Optional[LoggerTagValue] = None):
+        self.__config = DEFAULT_LOGGER_TAG.copy()
+        if config:
+            self.__config.update(config)
+
+        # 初始化欄位資訊
+        self.__is_default_record = {
+            k: v for k, v in self.__config.items() if k in LoggerRecord.__args__
+        }
         self.__field_default_value: Dict[str, Union[float, str]] = (
             FIELD_DEFAULT_VALUE.copy()
         )
-        if remove_record:
-            for key in remove_record:
-                self.__is_record[key] = False
-                self.__field_default_value.pop(key, None)
-            self.__field_group = {
-                key: [v for v in values if v not in remove_record]
-                for key, values in self.__field_group.items()
-            }
-            self.__field_group = {k: v for k, v in self.__field_group.items() if v}
+        # 根據config設定欄位資訊
+        self.__set_config()
+
+        self.reset_data()
+
+    def __set_config(self):
+        for k, v in self.__config.items():
+            if k in LoggerMark.__args__:
+                self.__field_default_value[k] = v
+            elif k in LoggerRecord.__args__ and v.lower() == "false":
+                if k in FIELD_GROUP["system"]:
+                    del self.__field_default_value[k]
+                elif k == "function" or k == "thread":
+                    for field in FIELD_GROUP[k]:
+                        del self.__field_default_value[field]
+
+    def reset_data(self) -> None:
+        """重置資料"""
         self.__field_value = self.__field_default_value.copy()
         self.__is_record = self.__is_default_record.copy()
-
-    def get_field_group(self) -> Dict[str, List[str]]:
-        """獲取欄位分組"""
-        return self.__field_group
 
     def get_is_record(self) -> Dict[str, bool]:
         """獲取是否記錄"""
@@ -79,17 +165,44 @@ class LoggerInfo:
             return True
         return False
 
-    def reset_value(self) -> None:
-        """重置欄位值"""
-        self.__field_value = self.__field_default_value.copy()
-        self.__is_record = self.__is_default_record.copy()
+    def set_is_record(self, key: str, is_record: bool) -> bool:
+        """設定是否記錄"""
+        if key in self.__field_default_value:
+            self.__is_record[key] = is_record
+            return True
+        return False
+
+    def update_record(self, config: LoggerTagValue) -> None:
+        """更新記錄"""
+        for k, v in config.items():
+            if k in LoggerMark.__args__:
+                self.__field_default_value[k] = v
+            elif k in LoggerRecord.__args__ and v.lower() == "false":
+                if k in FIELD_GROUP["system"]:
+                    self.__field_default_value.pop(k)
+                elif k == "function" or k == "thread":
+                    for field in FIELD_GROUP[k]:
+                        self.__field_default_value.pop(field)
+        self.reset_data()
 
 
 class LoggerOutput:
+    """
+    LoggerOutput 負責處裡日誌的輸出。
+    Methods:
+        output(data: LoggerInfo) -> None:
+            定義繼承該類別所輸出日誌的方式。
+        get(*args, **kwargs) -> Any:
+            根據*args、**kwargs來決定如何獲取存入日誌的資訊。
+    """
+
     def __init__(self, data: LoggerInfo):
         pass
 
     def output(self, data: LoggerInfo):
+        pass
+
+    def get(self, *args, **kwargs):
         pass
 
 
@@ -154,9 +267,7 @@ class SQLiteLog(LoggerOutput):
         self__field_info: Dict[欄位名稱, SQL資料型態]
         """
         field_name = [
-            field_name
-            for group in self.__logger_info.get_field_group().values()
-            for field_name in group
+            field_name for field_name in self.__logger_info.get_field_value().keys()
         ]
         self.__field_info = {
             field_name: self.__get_sql_type(FIELD_DEFAULT_VALUE[field_name])
@@ -225,26 +336,32 @@ class SQLiteLog(LoggerOutput):
             self.__create_table()
         self.__auto_close_db()
 
-    def output(self, data: LoggerInfo):
-        data = {
-            key: value
-            for key, value in data.get_field_value().items()
-            if data.get_is_record()[key]
-        }
+    def __switch_db(self) -> None:
+        """判斷DB當前的大小，是否切換資料庫"""
+        if self.__check_db_size():
+            self.__db_size = 0
+            self.__db_index += 1
+            self.__db_file_update()
+            self.__create_db()
+            self.__auto_close_db()
+
+    def __insert_data(self, data: LoggerInfo) -> int:
+        """插入資料"""
+        data = {key: value for key, value in data.get_field_value().items()}
         field = ", ".join(data.keys())
         placeholder = ", ".join("?" for _ in data.keys())
         value = tuple(data.values())
         sql = f"INSERT INTO logs ({field}) VALUES ({placeholder})"
         self.__conn_db()
-        self.__cursor.execute(sql, tuple(data.values()))
+        self.__cursor.execute(sql, value)
         self.__conn.commit()
         self.__auto_close_db()
+        len_value = len(value)
+        return len_value
 
+    def output(self, data: LoggerInfo):
+        """資料輸出"""
+        len_value = self.__insert_data(data)
         # 更新資料庫大小(預估)
-        self.__db_size += len(str(value)) + 100
-
-        if self.__check_db_size():
-            self.__db_index += 1
-            self.__db_file_update()
-            self.__create_db()
-            self.__auto_close_db()
+        self.__db_size += len_value + 100
+        self.__switch_db()
