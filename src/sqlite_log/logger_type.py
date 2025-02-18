@@ -185,6 +185,16 @@ class LoggerInfo:
                         self.__field_default_value.pop(field)
         self.reset_data()
 
+    def print_data(self) -> None:
+        """
+        顯示當前資料，用作異常排除。
+        """
+        print(f"field_value: {self.__field_value}")
+        print(f"is_record: {self.__is_record}")
+        print(f"field_default_value: {self.__field_default_value}")
+        print(f"is_default_record: {self.__is_default_record}")
+        print(f"config: {self.__config}")
+
 
 class LoggerOutput:
     """
