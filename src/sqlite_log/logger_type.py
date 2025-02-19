@@ -194,6 +194,10 @@ class LoggerInfo:
         print(f"is_default_record: {self.__is_default_record}")
         print(f"config: {self.__config}")
 
+    def copy(self) -> "LoggerInfo":
+        """複製 LoggerInfo"""
+        return LoggerInfo(self.__config)
+
 
 class LoggerOutput:
     """
