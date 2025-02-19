@@ -178,6 +178,7 @@ class LoggerInfo:
             if k in LoggerMark.__args__:
                 self.__field_default_value[k] = v
             elif k in LoggerRecord.__args__ and v.lower() == "false":
+                self.__is_default_record[k] = "false"
                 if k in FIELD_GROUP["system"]:
                     self.__field_default_value.pop(k)
                 elif k == "function" or k == "thread":
@@ -186,9 +187,7 @@ class LoggerInfo:
         self.reset_data()
 
     def print_data(self) -> None:
-        """
-        顯示當前資料，用作異常排除。
-        """
+        """顯示當前資料，用作異常排除。"""
         print(f"field_value: {self.__field_value}")
         print(f"is_record: {self.__is_record}")
         print(f"field_default_value: {self.__field_default_value}")
