@@ -66,6 +66,16 @@ class Logger:
         return func_tag
 
     def __set_system_logger(self, logger_info: LoggerInfo) -> None:
+        """
+        獲取系統資訊，並設置到LoggerInfo中。
+
+        system_info:
+            computer: 電腦資訊。
+            cpu: CPU資訊。
+            memory: 記憶體資訊。
+            gpu: GPU資訊。
+            host: 主機資訊。
+        """
         is_record = logger_info.get_is_record()
         if is_record["computer"] == True:
             logger_info.set_field_value("computer", self.__system_info.get_host_info())
@@ -79,6 +89,7 @@ class Logger:
             logger_info.set_field_value("host", self.__system_info.get_host_info())
 
     def __set_thread_logger(self, logger_info: LoggerInfo) -> None:
+        """獲取thread資訊，並設置到LoggerInfo中。"""
         is_record = logger_info.get_is_record()
         if is_record["thread"] == True:
             logger_info.set_field_value("thread_name", threading.current_thread().name)
@@ -86,6 +97,7 @@ class Logger:
             logger_info.set_field_value("process_id", os.getpid())
 
     def __run_error_return(self, error_return: ErrorReturnTypes) -> Any:
+        """執行error_return函數或error_return值"""
         if callable(error_return):
             try:
                 return error_return()
