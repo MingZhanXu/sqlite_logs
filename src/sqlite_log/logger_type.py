@@ -338,10 +338,10 @@ class SQLiteLog(LoggerOutput):
         if not os.path.exists(self.__db_folder):
             os.makedirs(self.__db_folder)
         # 初始化資料庫資訊
-        self.__db_size = 0
         self.__db_index = 0
         self.__get_field_info()
         self.__db_file_update()
+        self.__db_size = os.path.getsize(self.__db_file)
         # 切換至最新資料庫
         self.__get_last_db()
         # 初始化資料庫連線
@@ -372,7 +372,7 @@ class SQLiteLog(LoggerOutput):
         self.__cursor.execute(sql, value)
         self.__conn.commit()
         self.__auto_close_db()
-        len_value = len(value)
+        len_value = len(str(value))
         return len_value
 
     def output(self, data: LoggerInfo):
