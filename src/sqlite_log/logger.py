@@ -9,6 +9,7 @@ import re
 
 from typing import List, Optional, Callable, Any
 from .logger_type import LoggerInfo, LoggerOutput, SQLiteLog, Union
+from .get_system_info import SystemInfo
 
 # 正則表達式"#*:* "
 TAG_REGULAR = r"#\S+?:\S+"
@@ -27,6 +28,7 @@ class Logger:
         if logger_output is None:
             logger_output = LoggerOutput()
         self.__logger_output = logger_output
+        self.__system_info = SystemInfo()
 
     def __parse_func_doc(self, func: Callable[..., Any]) -> dict[str, str]:
         """解析函數的註釋"""
@@ -43,11 +45,34 @@ class Logger:
 
         return func_tag
 
+    def __set_system_logger(self, logger_info: LoggerInfo) -> None:
+        is_record = logger_info.get_is_record()
+        if is_record.get("computer"):
+            logger_info.set_field_value("computer", self.__system_info.get_host_info())
+        if is_record.get("cpu"):
+            logger_info.set_field_value("cpu", self.__system_info.get_cpu_info())
+        if is_record.get("memory"):
+            logger_info.set_field_value("memory", self.__system_info.get_memory_info())
+        if is_record.get("gpu"):
+            logger_info.set_field_value("gpu", self.__system_info.get_gpu_info())
+        if is_record.get("host"):
+            logger_info.set_field_value("host", self.__system_info.get_host_info())
+
+    def __set_thread_logger(self, logger_info: LoggerInfo) -> None:
+        is_record = logger_info.get_is_record()
+        if is_record.get("thread"):
+            logger_info.set_field_value("thread_name", threading.current_thread().name)
+            logger_info.set_field_value("thread_id", threading.current_thread().ident)
+            logger_info.set_field_value("process_id", os.getpid())
+
     def try_except(
         self,
         func: Optional[Callable[..., Any]] = None,
         *,
-        error_return: __ErrorReturnTypes = None,
+        error_return: Union[
+            Callable[[], Any],
+            Union[str, int, float, bool, list, tuple, set, dict, None],
+        ] = None,
     ) -> Any:
         """
         裝飾器函數，用於捕獲函數執行過程中的異常，並記錄異常信息。
@@ -75,21 +100,45 @@ class Logger:
             )
         logger_info = self.__logger_info
         self.__parse_func_doc(func)
+        is_record = logger_info.get_is_record()
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            start_time = datetime.datetime.now()
+            start_time_timestamp = start_time.timestamp()
+            start_time = start_time.isoformat()
+            logger_info.set_field_value("timestamp", start_time)
+            self.__set_system_logger(logger_info)
+            self.__set_thread_logger(logger_info)
+
+            if is_record.get("function"):
+                logger_info.set_field_value("function_name", func.__name__)
+                logger_info.set_field_value("args", str(args))
+                logger_info.set_field_value("kwargs", str(kwargs))
+
             return_value = None
             try:
                 return_value = func(*args, **kwargs)
             except Exception as e:
+                error_type = f"Function error: {type(e).__name__}"
+                if is_record.get("function"):
+                    logger_info.set_field_value("traceback", traceback.format_exc())
                 if callable(error_return):
                     try:
                         return_value = error_return()
                     except Exception as inner_e:
                         return_value = f"Error return function error: {inner_e}"
+                        error_type += f"\nError return function error: {inner_e}"
                 else:
                     return_value = error_return
+                logger_info.set_field_value("error_type", error_type)
             finally:
+                return_value = str(return_value)
+                logger_info.set_field_value("function_return", return_value)
+                end_time_timestamp = datetime.datetime.now().timestamp()
+                function_time = end_time_timestamp - start_time_timestamp
+                if is_record.get("function"):
+                    logger_info.set_field_value("function_time", function_time)
                 try:
                     self.__logger_output.output(logger_info)
                 except Exception as e:
