@@ -5,8 +5,17 @@ import os
 import threading
 import re
 
+from typing import Type
+
 from typing import List, Optional, Callable, Any
-from .logger_type import LoggerInfo, LoggerOutput, SQLiteLog, Union, LoggerMark
+from .logger_type import (
+    LoggerInfo,
+    LoggerOutput,
+    SQLiteLog,
+    Union,
+    LoggerMark,
+    LoggerRecord,
+)
 from .get_system_info import SystemInfo
 
 # 正則表達式"#*:* "
@@ -19,30 +28,40 @@ ErrorReturnTypes = Union[Callable[[], Any], ValueTypes]
 class Logger:
     def __init__(
         self,
-        logger_info: LoggerInfo = LoggerInfo(),
-        logger_output: Optional[LoggerOutput] = None,
+        logger_info: Optional[LoggerInfo] = None,
+        logger_output: Optional[Type[LoggerOutput]] = None,
     ):
+        if logger_info is None:
+            logger_info = LoggerInfo()
         self.__logger_info = logger_info.copy()
         if logger_output is None:
-            logger_output = LoggerOutput()
-        self.__logger_output = logger_output
+            logger_output = LoggerOutput
+        self.__logger_output = logger_output(logger_info=logger_info)
         self.__system_info = SystemInfo()
 
-    def __parse_func_doc(self, func: Callable[..., Any]) -> dict[str, str]:
-        """解析函數的註釋"""
+    def __get_func_tag(self, func: Callable[..., Any]) -> dict[str, str]:
+        """獲取函數的註釋"""
         func_doc = func.__doc__
-        func_tag = self.__logger_info.get_field_value()
         if func_doc:
             func_re = re.findall(TAG_REGULAR, func_doc)
-            func_re_tag = dict()
-            for item in func_re:
-                key, value = item.lstrip("#").split(":")
-                if key in func_tag.keys():
-                    if key in LoggerMark.__args__:
-                        func_re_tag[key] = value
-                    else:
-                        func_re_tag[key] = False if value.lower() == "false" else True
-            self.__logger_info.update_record(func_re_tag)
+            func_re_tag = {
+                item.lstrip("#").split(":")[0]: item.lstrip("#").split(":")[1]
+                for item in func_re
+            }
+            return func_re_tag
+        return dict()
+
+    def __parse_func_doc(self, func: Callable[..., Any]) -> dict[str, str]:
+        """解析函數的Tag"""
+        func_re_tag = self.__get_func_tag(func)
+        func_tag = self.__logger_info.get_field_value()
+        for k, v in func_re_tag.items():
+            if k in func_tag.keys():
+                if k in LoggerMark.__args__:
+                    func_tag[k] = v
+                elif k in LoggerRecord.__args__:
+                    func_tag[k] = False if v.lower() == "false" else True
+        self.__logger_info.update_record(func_tag)
 
         return func_tag
 
