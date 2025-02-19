@@ -261,6 +261,7 @@ class SystemInfo:
         "cpu": True,
         "memory": True,
         "gpu": True,
+        "host": True,
     }
 
     def __init__(self, config: Optional[SystemInfoConfig] = None):
