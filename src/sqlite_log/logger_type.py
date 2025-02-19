@@ -75,19 +75,19 @@ LoggerRecord = Literal[
     "host",
 ]
 LoggerTag = Union[LoggerMark, LoggerRecord]
-LoggerTagValue = Dict[LoggerTag, str]
+LoggerTagValue = Dict[LoggerTag, Union[str, bool]]
 
 DEFAULT_LOGGER_TAG: LoggerTagValue = {
     "level": "LOG",
     "tag": "",
     "message": "",
-    "function": "true",
-    "thread": "true",
-    "computer": "true",
-    "cpu": "true",
-    "memory": "true",
-    "gpu": "true",
-    "host": "true",
+    "function": True,
+    "thread": True,
+    "computer": True,
+    "cpu": True,
+    "memory": True,
+    "gpu": True,
+    "host": True,
 }
 
 LoggerConfig = Literal[
@@ -138,7 +138,7 @@ class LoggerInfo:
         for k, v in self.__config.items():
             if k in LoggerMark.__args__:
                 self.__field_default_value[k] = v
-            elif k in LoggerRecord.__args__ and v.lower() == "false":
+            elif k in LoggerRecord.__args__ and v == False:
                 if k in FIELD_GROUP["system"]:
                     del self.__field_default_value[k]
                 elif k == "function" or k == "thread":
@@ -176,9 +176,11 @@ class LoggerInfo:
         """更新記錄"""
         for k, v in config.items():
             if k in LoggerMark.__args__:
+                self.__config[k] = v
                 self.__field_default_value[k] = v
-            elif k in LoggerRecord.__args__ and v.lower() == "false":
-                self.__is_default_record[k] = "false"
+            elif k in LoggerRecord.__args__ and v == False:
+                self.__config[k] = False
+                self.__is_default_record[k] = False
                 if k in FIELD_GROUP["system"]:
                     self.__field_default_value.pop(k)
                 elif k == "function" or k == "thread":
@@ -196,7 +198,8 @@ class LoggerInfo:
 
     def copy(self) -> "LoggerInfo":
         """複製 LoggerInfo"""
-        return LoggerInfo(self.__config)
+        new_logger_info = LoggerInfo(self.__config)
+        return new_logger_info
 
 
 class LoggerOutput:
