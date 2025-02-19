@@ -14,8 +14,8 @@ from .get_system_info import SystemInfo
 # 正則表達式"#*:* "
 TAG_REGULAR = r"#\S+?:\S+"
 
-__ValueTypes = Union[str, int, float, bool, list, tuple, set, dict, None]
-__ErrorReturnTypes = Union[Callable[[], Any], __ValueTypes]
+ValueTypes = Union[str, int, float, bool, list, tuple, set, dict, None]
+ErrorReturnTypes = Union[Callable[[], Any], ValueTypes]
 
 
 class Logger:
@@ -69,10 +69,7 @@ class Logger:
         self,
         func: Optional[Callable[..., Any]] = None,
         *,
-        error_return: Union[
-            Callable[[], Any],
-            Union[str, int, float, bool, list, tuple, set, dict, None],
-        ] = None,
+        error_return: ErrorReturnTypes = None,
     ) -> Any:
         """
         裝飾器函數，用於捕獲函數執行過程中的異常，並記錄異常信息。
