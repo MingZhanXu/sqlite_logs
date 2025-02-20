@@ -180,3 +180,7 @@ class Logger:
             return return_value
 
         return wrapper
+
+    def get_log(self, *args, **kwargs) -> Any:
+        data = self.__logger_output.get(*args, **kwargs)
+        return data

@@ -96,6 +96,16 @@ LoggerConfig = Literal[
     "message",
 ]
 
+SQLCondition = Literal[
+    "=",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "!=",
+    "LIKE",
+]
+
 
 class LoggerInfo:
     """
@@ -380,3 +390,37 @@ class SQLiteLog(LoggerOutput):
         # 更新資料庫大小(預估)
         self.__db_size += len_value + 100
         self.__switch_db()
+
+    def get(
+        self,
+        filter: Optional[List[LoggerField]] = None,
+        rule: Optional[Dict[LoggerField, Dict[str, Union[str, int, float]]]] = None,
+    ) -> Any:
+        """
+        根據條件獲取資料
+
+        rule {field_name: {condition: value}}
+        condition: "=", ">", "<", ">=", "<=", "!=", "LIKE"
+        """
+        if filter:
+            field_name = ["id"] + filter
+            sql_select = f"SELECT {', '.join(filter)} FROM logs "
+        else:
+            field_name = ["id"] + [
+                field_name for field_name, _ in self.__field_info.items()
+            ]
+            sql_select = f"SELECT {', '.join(field_name)} FROM logs "
+        if rule:
+            sql_rule = " AND ".join(
+                f"{field_name} {condition} {value}"
+                for field_name, condition_value in rule.items()
+                for condition, value in condition_value.items()
+            )
+            sql_select += f"WHERE {sql_rule}"
+        else:
+            sql_select += "WHERE 1"
+        self.__conn_db()
+        self.__cursor.execute(sql_select)
+        data = self.__cursor.fetchall()
+        self.__auto_close_db()
+        return field_name, data
