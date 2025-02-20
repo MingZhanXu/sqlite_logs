@@ -108,13 +108,11 @@ class LoggerInfo:
         reset_data() -> None:
             重置資料，需在每次記錄完後呼叫。
         get_is_record() -> dict[str, bool]:
-            獲取欄位是否應該被記錄。
+            獲取欄位群組是否應該被記錄。
         get_field_value() -> dict[str, Any]:
-            獲取所有欄位的值。
-        set_field_value(field: str, value: Any) -> None:
+            獲取欄位的名稱與欄位的值。
+        set_field_value(field: str, value: Any) -> bool:
             設定特定欄位的值，用於 Logger 資料傳遞。
-        set_is_record(field: str, is_record: bool) -> None:
-            設定特定欄位是否記錄，用於傳遞給 Logger。
     """
 
     def __init__(self, config: Optional[LoggerTagValue] = None):
@@ -338,14 +336,15 @@ class SQLiteLog(LoggerOutput):
         if not os.path.exists(self.__db_folder):
             os.makedirs(self.__db_folder)
         # 初始化資料庫資訊
+        self.__db_size = 0
         self.__db_index = 0
         self.__get_field_info()
         self.__db_file_update()
-        self.__db_size = os.path.getsize(self.__db_file)
         # 切換至最新資料庫
         self.__get_last_db()
         # 初始化資料庫連線
         self.__conn_db()
+        self.__db_size = os.path.getsize(self.__db_file)
         # 檢查資料表是否存在
         self.__cursor.execute(SQLiteLog.__CHECK_TABLE_SQL)
         if not self.__cursor.fetchone():
