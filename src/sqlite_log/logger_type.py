@@ -362,7 +362,7 @@ class SQLiteLog(LoggerOutput):
 
     def __insert_data(self, data: LoggerInfo) -> int:
         """插入資料"""
-        data = {key: value for key, value in data.get_field_value().items()}
+        data = data.get_field_value().copy()
         field = ", ".join(data.keys())
         placeholder = ", ".join("?" for _ in data.keys())
         value = tuple(data.values())
