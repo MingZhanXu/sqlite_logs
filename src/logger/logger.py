@@ -10,12 +10,11 @@ from typing import Type
 from typing import List, Optional, Callable, Any
 from .logger_type import (
     LoggerInfo,
-    LoggerOutput,
-    SQLiteLog,
     Union,
     LoggerMark,
     LoggerRecord,
 )
+from .logger_output import LoggerOutput
 from .get_system_info import SystemInfo
 
 # 正則表達式"#*:* "
