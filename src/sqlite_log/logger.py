@@ -174,7 +174,7 @@ class Logger:
                 try:
                     self.__logger_output.output(logger_info)
                 except Exception as e:
-                    print(f"Logger output error: {e}")
+                    print(f"Logger output error: {type(self.__logger_output)}:{e}")
                     logger_info.print_data()
 
             return return_value
