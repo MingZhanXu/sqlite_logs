@@ -1,5 +1,9 @@
-from src.logger import Logger
-from src.logger import SQLiteLog, LoggerInfo, LoggerTagValue
+from src.logger import (
+    Logger,
+    LoggerInfo,
+    LoggerTagValue,
+    SQLiteLog,
+)
 
 if __name__ == "__main__":
     config: LoggerTagValue = {"cpu": False, "level": "DEBUG"}
