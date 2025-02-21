@@ -7,6 +7,7 @@ LoggerField = List[
     Literal[
         # Base
         "level",
+        "tag",
         "timestamp",
         "message",
         # Function
@@ -31,7 +32,7 @@ LoggerField = List[
 ]
 LoggerGroup = Literal["base", "function", "thread", "system"]
 FIELD_GROUP: Dict[LoggerGroup, List[LoggerField]] = {
-    "base": ["level", "timestamp", "message"],
+    "base": ["level", "tag", "timestamp", "message"],
     "function": ["function_name", "args", "kwargs", "function_time", "function_return"],
     "thread": ["thread_name", "thread_id", "process_id"],
     "system": ["computer", "cpu", "memory", "gpu", "host"],
