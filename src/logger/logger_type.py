@@ -1,38 +1,42 @@
 from typing import Dict, Optional, List, Any, Union, Literal
 
-LoggerField = List[
-    Literal[
-        # Base
-        "level",
-        "tag",
-        "timestamp",
-        "message",
-        # Function
-        "function_name",
-        "args",
-        "kwargs",
-        "function_time",
-        "function_return",
-        "error_type",
-        "traceback",
-        # Thread
-        "thread_name",
-        "thread_id",
-        "process_id",
-        # System
-        "computer",
-        "cpu",
-        "memory",
-        "gpu",
-        "host",
-    ]
+LoggerFieldBase = Literal[
+    "level",
+    "tag",
+    "timestamp",
+    "message",
 ]
+LoggerFieldFunction = Literal[
+    "function_name",
+    "args",
+    "kwargs",
+    "function_time",
+    "function_return",
+    "error_type",
+    "traceback",
+]
+LoggerFieldThread = Literal[
+    "thread_name",
+    "thread_id",
+    "process_id",
+]
+LoggerFieldSystem = Literal[
+    "computer",
+    "cpu",
+    "memory",
+    "gpu",
+    "host",
+]
+LoggerField = List[
+    Union[LoggerFieldBase, LoggerFieldFunction, LoggerFieldThread, LoggerFieldSystem]
+]
+
 LoggerGroup = Literal["base", "function", "thread", "system"]
 FIELD_GROUP: Dict[LoggerGroup, List[LoggerField]] = {
-    "base": ["level", "tag", "timestamp", "message"],
-    "function": ["function_name", "args", "kwargs", "function_time", "function_return"],
-    "thread": ["thread_name", "thread_id", "process_id"],
-    "system": ["computer", "cpu", "memory", "gpu", "host"],
+    "base": [LoggerFieldBase.__args__],
+    "function": [LoggerFieldFunction.__args__],
+    "thread": [LoggerFieldThread.__args__],
+    "system": [LoggerFieldSystem.__args__],
 }
 FIELD_DEFAULT_VALUE: Dict[str, Optional[Union[str, float, int]]] = {
     "level": "LOG",
