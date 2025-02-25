@@ -77,15 +77,15 @@ class Logger:
         """
         is_record = logger_info.get_is_record()
         if is_record["computer"] == True:
-            logger_info.set_field_value("computer", self.__system_info.get_host_info())
+            logger_info.set_field_value("computer", self.__system_info.computer)
         if is_record["cpu"] == True:
-            logger_info.set_field_value("cpu", self.__system_info.get_cpu_info())
+            logger_info.set_field_value("cpu", self.__system_info.cpu)
         if is_record["memory"] == True:
-            logger_info.set_field_value("memory", self.__system_info.get_memory_info())
+            logger_info.set_field_value("memory", self.__system_info.memory)
         if is_record["gpu"] == True:
-            logger_info.set_field_value("gpu", self.__system_info.get_gpu_info())
+            logger_info.set_field_value("gpu", self.__system_info.gpu)
         if is_record["host"] == True:
-            logger_info.set_field_value("host", self.__system_info.get_host_info())
+            logger_info.set_field_value("host", self.__system_info.host)
 
     def __set_thread_logger(self, logger_info: LoggerInfo) -> None:
         """獲取thread資訊，並設置到LoggerInfo中。"""

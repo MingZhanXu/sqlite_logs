@@ -268,19 +268,36 @@ class SystemInfo:
         self.__config = SystemInfo.DEFAULT_CONFIG.copy()
         if config:
             self.__config.update(config)
-        self.__data = {k: dict() for k in self.__config.keys() if k == True}
-        if self.__config["computer"]:
-            self.__data["computer"] = get_computer_info()
-            self.__data["computer_json"] = json.dumps(
-                self.__data["computer"], indent=4, ensure_ascii=False
-            )
+        # 初始化資料
+        self.__data = {}
+        # 預先取得電腦資訊（此資訊預期不會變動），host 資訊需要電腦資訊
+        if self.__config["computer"] or self.__config["host"]:
+            self.__refresh_computer_info()
 
-    def get_computer_info(self) -> Optional[str]:
+    def __refresh_computer_info(self):
+        """
+        更新電腦資訊
+        """
+        self.__data["computer"] = get_computer_info()
+        self.__data["computer_json"] = json.dumps(
+            self.__data["computer"], indent=4, ensure_ascii=False
+        )
+
+    @property
+    def computer(self) -> Optional[str]:
+        """
+        獲取電腦資訊，如果未設定則回傳 None。
+        """
         if self.__config["computer"]:
             return self.__data["computer_json"]
         return None
 
-    def get_cpu_info(self) -> Optional[str]:
+    @property
+    def cpu(self) -> Optional[str]:
+        """
+        獲取 CPU 資訊，如果未設定則回傳 None。
+        此資訊會在每次呼叫時重新取得。
+        """
         if self.__config["cpu"]:
             self.__data["cpu"] = get_cpu_info()
             self.__data["cpu_json"] = json.dumps(
@@ -289,7 +306,12 @@ class SystemInfo:
             return self.__data["cpu_json"]
         return None
 
-    def get_memory_info(self) -> Optional[str]:
+    @property
+    def memory(self) -> Optional[str]:
+        """
+        獲取記憶體資訊，如果未設定則回傳 None。
+        此資訊會在每次呼叫時重新取得。
+        """
         if self.__config["memory"]:
             self.__data["memory"] = get_memory_info()
             self.__data["memory_json"] = json.dumps(
@@ -298,7 +320,12 @@ class SystemInfo:
             return self.__data["memory_json"]
         return None
 
-    def get_gpu_info(self) -> Optional[str]:
+    @property
+    def gpu(self) -> Optional[str]:
+        """
+        獲取 GPU 資訊，如果未設定則回傳 None。
+        此資訊會在每次呼叫時重新取得。
+        """
         if self.__config["gpu"]:
             self.__data["gpu"] = get_gpu_info()
             self.__data["gpu_json"] = json.dumps(
@@ -307,7 +334,12 @@ class SystemInfo:
             return self.__data["gpu_json"]
         return None
 
-    def get_host_info(self) -> Optional[str]:
+    @property
+    def host(self) -> Optional[str]:
+        """
+        獲取主機資訊，如果未設定則回傳 None。
+        如果未設定電腦資訊，則會取得電腦資訊。
+        """
         if self.__config["host"]:
             self.__data["host"] = get_host_info(
                 computer_name=self.__data["computer"]["computer_name"],
