@@ -149,6 +149,9 @@ class Logger:
             self.__set_thread_logger(logger_info)
 
             if is_record["function"] == True:
+                stack = traceback.extract_stack()[-2]
+                logger_info.set_field_value("function_file", stack.filename)
+                logger_info.set_field_value("function_line", stack.lineno)
                 logger_info.set_field_value("function_name", func.__name__)
                 logger_info.set_field_value("args", str(args))
                 logger_info.set_field_value("kwargs", str(kwargs))

@@ -1,4 +1,6 @@
-from typing import Dict, Optional, List, Any, Union, Literal
+from typing import Dict, Optional, List, Any, Union, Literal, TypeVar, Callable
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 LoggerFieldBase = Literal[
     "level",
@@ -7,6 +9,8 @@ LoggerFieldBase = Literal[
     "message",
 ]
 LoggerFieldFunction = Literal[
+    "function_file",
+    "function_line",
     "function_name",
     "args",
     "kwargs",
@@ -43,6 +47,8 @@ FIELD_DEFAULT_VALUE: Dict[str, Optional[Union[str, float, int]]] = {
     "timestamp": 0.0,
     "message": "",
     "tag": "",
+    "function_file": "",
+    "function_line": 0,
     "function_name": "",
     "args": "",
     "kwargs": "",
