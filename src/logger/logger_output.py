@@ -180,27 +180,28 @@ class SQLiteLog(LoggerOutput):
     ) -> Any:
         """
         根據條件獲取資料
+        example:
+        filter: ["id", "name"]
+        rule: {"id": {">":3}}
 
         rule {field_name: {condition: value}}
         condition: "=", ">", "<", ">=", "<=", "!=", "LIKE"
         """
-        if filter:
-            field_name = ["id"] + filter
-            sql_select = f"SELECT {', '.join(filter)} FROM logs "
+        if filter is None:
+            filter_field = [field_name for field_name, _ in self.__field_info.items()]
         else:
-            field_name = ["id"] + [
-                field_name for field_name, _ in self.__field_info.items()
-            ]
-            sql_select = f"SELECT {', '.join(field_name)} FROM logs "
+            filter_field = filter
+        field_name = list(dict.fromkeys(filter_field))
+        sql_select = f"SELECT {', '.join(field_name)} FROM logs WHERE "
         if rule:
             sql_rule = " AND ".join(
                 f"{field_name} {condition} {value}"
                 for field_name, condition_value in rule.items()
                 for condition, value in condition_value.items()
             )
-            sql_select += f"WHERE {sql_rule}"
+            sql_select += f"{sql_rule}"
         else:
-            sql_select += "WHERE 1"
+            sql_select += "1"
         self.__conn_db()
         self.__cursor.execute(sql_select)
         data = self.__cursor.fetchall()
