@@ -228,11 +228,14 @@ class LoggerOutput:
             根據*args、**kwargs來決定如何獲取存入日誌的資訊。
     """
 
-    def __init__(self, data: LoggerInfo):
+    def __init__(self):
         pass
 
     def output(self, data: LoggerInfo):
         pass
 
     def get(self, *args, **kwargs):
+        pass
+
+    def init(self, data: Optional[LoggerInfo] = None):
         pass

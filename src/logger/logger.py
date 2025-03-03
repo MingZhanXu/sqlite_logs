@@ -28,14 +28,16 @@ class Logger:
     def __init__(
         self,
         logger_info: Optional[LoggerInfo] = None,
-        logger_output: Optional[Type[LoggerOutput]] = None,
+        logger_output: Optional[LoggerOutput] = None,
     ):
         if logger_info is None:
             logger_info = LoggerInfo()
         self.__logger_info = logger_info.copy()
         if logger_output is None:
             logger_output = LoggerOutput
-        self.__logger_output = logger_output(logger_info=logger_info)
+        self.__logger_output = logger_output
+        if not self.__logger_output.init(logger_info):
+            print("Logger output init error.")
         self.__system_info = SystemInfo()
 
     def __get_func_tag(self, func: Callable[..., Any]) -> dict[str, str]:

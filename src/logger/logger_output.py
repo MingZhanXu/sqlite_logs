@@ -31,7 +31,6 @@ class SQLiteLog(LoggerOutput):
         self,
         db_folder: str = __DEFAULT_FOLDER,
         db_name: str = "log",
-        logger_info: Optional[LoggerInfo] = None,
         db_max_size: int = __MAX_SIZE,
         wal: bool = True,
         auto_close: bool = False,
@@ -41,12 +40,9 @@ class SQLiteLog(LoggerOutput):
         # ==============================
         self.__db_folder = db_folder
         self.__db_name = db_name
-        self.__logger_info = logger_info if logger_info else LoggerInfo()
         self.__db_max_size = db_max_size
         self.__wal = wal
         self.__auto_close = auto_close
-
-        self.__init_db()
 
     def __db_file_update(self) -> None:
         """更新資料庫名稱"""
@@ -119,6 +115,12 @@ class SQLiteLog(LoggerOutput):
         self.__conn_db()
         self.__create_table()
         self.__auto_close_db()
+
+    def init(self, logger_info: Optional[LoggerInfo]) -> bool:
+        """logger output 初始化"""
+        self.__logger_info = logger_info if logger_info else LoggerInfo()
+        self.__init_db()
+        return True
 
     def __init_db(self) -> None:
         """初始化資料庫"""
