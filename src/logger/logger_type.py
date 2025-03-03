@@ -1,4 +1,5 @@
 from typing import Dict, Optional, List, Any, Union, Literal, TypeVar, Callable
+from abc import ABC, abstractmethod
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -218,24 +219,26 @@ class LoggerInfo:
         return new_logger_info
 
 
-class LoggerOutput:
+class LoggerOutput(ABC):
     """
     LoggerOutput 負責處裡日誌的輸出。
     Methods:
+        init(data: Optional[LoggerInfo] = None) -> bool:
+            初始化 LoggerOutput。
         output(data: LoggerInfo) -> None:
             定義繼承該類別所輸出日誌的方式。
         get(*args, **kwargs) -> Any:
             根據*args、**kwargs來決定如何獲取存入日誌的資訊。
     """
 
-    def __init__(self):
+    @abstractmethod
+    def init(self, data: Optional[LoggerInfo] = None):
         pass
 
+    @abstractmethod
     def output(self, data: LoggerInfo):
         pass
 
+    @abstractmethod
     def get(self, *args, **kwargs):
-        pass
-
-    def init(self, data: Optional[LoggerInfo] = None):
         pass
