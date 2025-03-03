@@ -17,3 +17,7 @@ if __name__ == "__main__":
 
     for i in range(10):
         test(i, i - 1)
+
+    filter = ["id", "function_line", "function_name"]
+    rule = {"id": {">": 3}}
+    print(logger.get_log(filter=filter, rule=rule))
