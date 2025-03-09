@@ -162,6 +162,7 @@ class Logger:
             try:
                 return_value = func(*args, **kwargs)
             except Exception as e:
+                logger_info.set_field_value("level", "ERROR")
                 if is_record["function"] == True:
                     logger_info.set_field_value("traceback", traceback.format_exc())
                     error_type = f"Function error: {type(e).__name__}"
